@@ -8,6 +8,7 @@
 #include "audio_element.h"
 #include "myDelay.h"
 #include "audio_type_def.h"
+#include "LFO.h"
 
 static const char *TAG = "MYDELAY";
 
@@ -17,7 +18,10 @@ typedef struct myDelay {
     int  samplerate;
     int  channel;
     unsigned char *buf;
-    unsigned char *delayMemory
+    unsigned char *delayMemory; //custom
+    int delayTime;        //custom  (dovrebbe essere uno smoothed value)
+    int memorySize;     //custom
+    LFO_cfg_t modulation; //custom
     int  byte_num;
     int  at_eof;
 } myDelay_t;
@@ -70,7 +74,9 @@ esp_err_t myDelay_set_info(audio_element_handle_t self, int rate, int ch)
     
         myDelay->samplerate = rate;
         myDelay->channel = ch;
-        
+        myDelay->delayTime = 1; //custom, delay time in seconds
+        myDelay->memorySize = 0; //custom
+        myDelay->modulation = DEFAULT_LFO_CONFIG(); //custom ERROREEEEEEEEEEEEEEEEE
     }
     return ESP_OK;
 }
@@ -152,24 +158,33 @@ static int myDelay_process(audio_element_handle_t self, char *in_buffer, int in_
         dm_size = fread((char *)myDelay->delayMemory, 1, BUF_SIZE, infile); //custom
 #else
         r_size = audio_element_input(self, (char *)myDelay->buf, BUF_SIZE);
+        dm_size = audio_element_input(self, (char *)myDelay->delayMemory, BUF_SIZE);
 #endif
     }
-    if (r_size > 0 ||) {
-        if (r_size != BUF_SIZE) {
+    if (r_size > 0 || dm_size > 0) { //custom   
+        if (r_size != BUF_SIZE || dm_size != BUF_SIZE) { //custom
             myDelay->at_eof = 1;
         }
         myDelay->byte_num += r_size;
+        myDelay->byte_num += dm_size; //custom  
 
         unsigned char *pbuf = myDelay->buf;
-        unsigned char *pDelayMem = myDelay->delayMemory;
+        unsigned char *pDelayMem = myDelay->delayMemory; //custom
 
+        int writeIndex = 0; //custom
+        audiosample16_t audiosample;
+        audiosample16_t oldSample; //custom
         for(int i=0;i<r_size;i+=2){
-            audiosample16_t audiosample;
             audiosample.audiosample16_bytes.h = *pbuf;
             audiosample.audiosample16_bytes.l = *(pbuf+1);
-
             // process audio samples here e.g. scale by 1/16 (attenuation):
             // audiosample.audiosample16 = audiosample.audiosample16>>4;
+            
+            int readIndex = writeIndex - (myDelay->delayTime * myDelay->samplerate) ; //custom
+
+            *pDelayMem = audiosample.audiosample16_bytes.h; //custom
+            *(pDelayMem+1) = audiosample.audiosample16_bytes.l; //custom
+            pDelayMem+=2; //custom
 
             *pbuf = audiosample.audiosample16_bytes.h;
             *(pbuf+1) = audiosample.audiosample16_bytes.l;
