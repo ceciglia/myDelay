@@ -8,7 +8,6 @@
 #include "audio_element.h"
 #include "myDelay.h"
 #include "audio_type_def.h"
-#include "LFO.h"
 
 static const char *TAG = "MYDELAY";
 
@@ -19,15 +18,18 @@ typedef struct myDelay {
     int  channel;
     unsigned char *buf;
     unsigned char *delayMemory; //custom
-    int delayTime;        //custom  (dovrebbe essere uno smoothed value)
     int memorySize;     //custom
-    LFO_cfg_t modulation; //custom
+    int writeIndex;   //custom
+    float oldSample; //custom
+    float feedback;   //custom
+    // LFO_t* modulation; //custom
     int  byte_num;
     int  at_eof;
 } myDelay_t;
 
 typedef union {
 	short audiosample16;
+    int16_t audiosampleint16; //custom
 	struct audiosample16_bytes{
 		unsigned h	:8;
 		unsigned l	:8;
@@ -74,12 +76,28 @@ esp_err_t myDelay_set_info(audio_element_handle_t self, int rate, int ch)
     
         myDelay->samplerate = rate;
         myDelay->channel = ch;
-        myDelay->delayTime = 1; //custom, delay time in seconds
-        myDelay->memorySize = 0; //custom
-        myDelay->modulation = DEFAULT_LFO_CONFIG(); //custom ERROREEEEEEEEEEEEEEEEE
+
     }
     return ESP_OK;
 }
+
+//custom
+// esp_err_t myDelay_set_LFO_modulation(audio_element_handle_t self, LFO_cfg_t *modCfg)
+// {
+//     myDelay_t *myDelay = (myDelay_t *)audio_element_getdata(self);
+//     if (modCfg == NULL) {
+//         ESP_LOGE(TAG, "modCfg is NULL. (line %d)", __LINE__);
+//         return ESP_ERR_INVALID_ARG;
+//     }
+//     LFO_t *LFO = (LFO_t *)audio_element_getdata(self);
+//     if (LFO->samplerate != modCfg->samplerate || LFO->channel != modCfg->channel) {
+//         ESP_LOGE(TAG, "LFO sample rate and channel must match modulation config. (line %d)", __LINE__);
+//         return ESP_ERR_INVALID_ARG;
+//     }
+//     myDelay->modulation = LFO;
+//     return ESP_OK;
+// }
+//end custom
 
 static esp_err_t myDelay_destroy(audio_element_handle_t self)
 {
@@ -107,12 +125,26 @@ static esp_err_t myDelay_open(audio_element_handle_t self)
         || is_valid_myDelay_channel(myDelay->channel) != ESP_OK) {
         return ESP_ERR_INVALID_ARG;
     }
-    myDelay->buf = (unsigned char *)calloc(1, BUF_SIZE);
+    myDelay->buf = (unsigned char *)calloc(1, BUF_SIZE); //custom
     if (myDelay->buf == NULL) {
         ESP_LOGE(TAG, "calloc buffer failed. (line %d)", __LINE__);
         return ESP_ERR_NO_MEM;
     }
     memset(myDelay->buf, 0, BUF_SIZE);
+
+    //custom
+    myDelay->delayMemory = (unsigned char *)calloc(1, BUF_SIZE);
+    if (myDelay->delayMemory == NULL) {
+        ESP_LOGE(TAG, "calloc buffer failed. (line %d)", __LINE__);
+        return ESP_ERR_NO_MEM;
+    }
+    memset(myDelay->delayMemory, 0, BUF_SIZE);
+    
+    myDelay->memorySize = (int) (MYDELAY_MAX_DELAY_TIME * myDelay->samplerate) + BUF_SIZE ; //custom
+    myDelay->feedback = 0.0f; //custom
+    myDelay->oldSample = 0.0f; //custom
+
+    //end custom
 
 #ifdef DEBUG_MYDELAY_ENC_ISSUE
     char fileName[100] = {'//', 's', 'd', 'c', 'a', 'r', 'd', '//', 't', 'e', 's', 't', '.', 'p', 'c', 'm', '\0'};
@@ -170,25 +202,32 @@ static int myDelay_process(audio_element_handle_t self, char *in_buffer, int in_
 
         unsigned char *pbuf = myDelay->buf;
         unsigned char *pDelayMem = myDelay->delayMemory; //custom
+        // unsigned char *pMod = myDelay->modulation.buf; //custom ERROREEEEEEEEEEEEEEEEEEEEE
 
-        int writeIndex = 0; //custom
         audiosample16_t audiosample;
-        audiosample16_t oldSample; //custom
+        float dt = 0.5f; //custom da cancellare
+
         for(int i=0;i<r_size;i+=2){
-            audiosample.audiosample16_bytes.h = *pbuf;
-            audiosample.audiosample16_bytes.l = *(pbuf+1);
-            // process audio samples here e.g. scale by 1/16 (attenuation):
-            // audiosample.audiosample16 = audiosample.audiosample16>>4;
+            // vers 1
+            float readIndex = myDelay->writeIndex - (dt * myDelay->samplerate) ; //custom
+            int integerPart = (int) readIndex; //custom
+            float fractionalPart = readIndex - integerPart; //custom
+            float alpha = fractionalPart / (2.0f - fractionalPart); //custom
             
-            int readIndex = writeIndex - (myDelay->delayTime * myDelay->samplerate) ; //custom
+            int A = (integerPart + myDelay->memorySize) % myDelay->memorySize; //custom
+            int B = (A + 1) % myDelay->memorySize; //custom
 
-            *pDelayMem = audiosample.audiosample16_bytes.h; //custom
-            *(pDelayMem+1) = audiosample.audiosample16_bytes.l; //custom
-            pDelayMem+=2; //custom
+            *(pDelayMem - i + myDelay->writeIndex * 2) = *(pbuf + i); //custom
 
-            *pbuf = audiosample.audiosample16_bytes.h;
-            *(pbuf+1) = audiosample.audiosample16_bytes.l;
-            pbuf+=2;
+            float sampleValue = alpha * ((float)*(pDelayMem - i + B * 2) - myDelay->oldSample) + (float)*(pDelayMem - i + A * 2); //custom
+            myDelay->oldSample = sampleValue; //custom
+
+            audiosample.audiosampleint16 = (int16_t)(sampleValue * 32767.0f);
+            *(pbuf + i) = audiosample.audiosampleint16;
+            *(pDelayMem - i + myDelay->writeIndex * 2) = (int16_t)*(pDelayMem - i + myDelay->writeIndex * 2) + (int16_t)(audiosample.audiosampleint16 * myDelay->feedback); //custom
+
+            myDelay->writeIndex = (myDelay->writeIndex + 1) % myDelay->memorySize; //custom
+            // end vers 1
         }
         ret = audio_element_output(self, (char *)myDelay->buf, BUF_SIZE);
     } else {

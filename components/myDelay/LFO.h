@@ -44,7 +44,7 @@ typedef struct LFO_cfg {
     }
 
 /**
- * @brief      Set the audio sample rate and the number of channels to be processed by the delay.
+ * @brief      Set the audio sample rate and the number of channels to be processed by the LFO.
  *
  * @param      self       Audio element handle
  * @param      rate       Audio sample rate
@@ -57,7 +57,31 @@ typedef struct LFO_cfg {
 esp_err_t LFO_set_info(audio_element_handle_t self, int rate, int ch);
 
 /**
- * @brief      Create an Audio Element handle that delay incoming data.
+ * @brief      Set the audio waveform.
+ *
+ * @param      self       Audio element handle
+ * @param      type       New waveform type
+ *
+ * @return     
+ *             ESP_OK
+ *             ESP_FAIL
+ */
+esp_err_t LFO_set_waveform(audio_element_handle_t self, int type);
+
+/**
+ * @brief      Set the audio frequency.
+ *
+ * @param      self       Audio element handle
+ * @param      freq       New frequency
+ *
+ * @return     
+ *             ESP_OK
+ *             ESP_FAIL
+ */
+esp_err_t LFO_set_frequency(audio_element_handle_t self, float freq);
+
+/**
+ * @brief      Create an Audio Element handle that LFO incoming data.
  *
  * @param      config  The configuration
  *

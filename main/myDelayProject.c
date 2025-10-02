@@ -34,7 +34,7 @@ static const char *TAG = "MYDELAYPROJECT";
 void app_main(void)
 {
     audio_pipeline_handle_t pipeline;
-    audio_element_handle_t i2s_stream_writer, i2s_stream_reader;
+    audio_element_handle_t i2s_stream_writer, i2s_stream_reader, delay;
     // audio_element_handle_t filter_upsample_el = create_filter(SAVE_FILE_RATE, SAVE_FILE_CHANNEL, RESAMPLE_ENCODE_MODE);
 
     esp_log_level_set("*", ESP_LOG_INFO);
@@ -112,8 +112,8 @@ void app_main(void)
     ESP_LOGI(TAG, "[4.1] Listening event from all elements of pipeline");
     audio_pipeline_set_listener(pipeline, evt);
 
-    i2s_stream_set_clk(i2s_stream_reader, 48000, 16, 2);
-    i2s_stream_set_clk(i2s_stream_writer, 48000, 16, 2);
+    i2s_stream_set_clk(i2s_stream_reader, 48000, 16, 1); // CHECKK THIS 
+    i2s_stream_set_clk(i2s_stream_writer, 48000, 16, 1); /// CHECKK THIS
     // ESP_LOGI(TAG, "AFTEREXE sample rate in i2s_stream_writer:%d", (int) i2s_cfg.std_cfg.clk_cfg.sample_rate_hz);
     // ESP_LOGI(TAG, "AFTEREXE data_bit_width in i2s_stream_writer:%d", (int) i2s_cfg.std_cfg.slot_cfg.data_bit_width);
     // ESP_LOGI(TAG, "AFTEREXE slot_mode in i2s_stream_writer:%d", (int) i2s_cfg.std_cfg.slot_cfg.slot_mode);

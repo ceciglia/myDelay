@@ -26,6 +26,7 @@ typedef struct LFO {
 
 typedef union {
 	short audiosample16;
+    int16_t audiosampleint16; //custom
 	struct audiosample16_bytes{
 		unsigned h	:8;
 		unsigned l	:8;
@@ -72,10 +73,6 @@ esp_err_t LFO_set_info(audio_element_handle_t self, int rate, int ch)
     
         LFO->samplerate = rate;
         LFO->channel = ch;
-        LFO->frequency = 220.0f; //custom
-        LFO->waveform = 0;  //custom
-        LFO->currentPhase = 0.0f; //custom
-        LFO->samplingPeriod = 1.0f / LFO->samplerate; //custom
         
     }
     return ESP_OK;
@@ -145,6 +142,30 @@ static esp_err_t LFO_close(audio_element_handle_t self)
     return ESP_OK;
 }
 
+//custom
+esp_err_t LFO_set_waveform(audio_element_handle_t self, int type)
+{
+    LFO_t *LFO = (LFO_t *)audio_element_getdata(self);
+    if (type < 0 || type > 3) {
+        ESP_LOGE(TAG, "Invalid waveform type. (line %d)", __LINE__);
+        return ESP_ERR_INVALID_ARG;
+    }
+    LFO->waveform = type;
+    return ESP_OK;
+}
+
+esp_err_t LFO_set_frequency(audio_element_handle_t self, float newFreq)
+{
+    LFO_t *LFO = (LFO_t *)audio_element_getdata(self);
+    if (newFreq <= 0.0f || newFreq > (LFO->samplerate / 2.0f)) {
+        ESP_LOGE(TAG, "Invalid frequency value. (line %d)", __LINE__);
+        return ESP_ERR_INVALID_ARG;
+    }
+    LFO->frequency = newFreq;
+    return ESP_OK;
+}
+//end custom
+
 esp_err_t LFO_get_next_sample(audio_element_handle_t self, float *outSample) 
 {
     LFO_t *LFO = (LFO_t *)audio_element_getdata(self);
@@ -155,13 +176,16 @@ esp_err_t LFO_get_next_sample(audio_element_handle_t self, float *outSample)
             sample = sinf(LFO->currentPhase * 2.0f * M_PI);
             break;
         case 1: // Square wave
-            sample = (sinf(LFO->currentPhase * 2.0f * M_PI) >= 0.0f) ? 1.0f : -1.0f;
+            // sample = (sinf(LFO->currentPhase * 2.0f * M_PI) >= 0.0f) ? 1.0f : -1.0f;
+            sample = (LFO->currentPhase >= 0.0f) ? 1.0f : -1.0f;
             break;
         case 2: // Triangle wave
-            sample = (2.0f / M_PI) * asinf(sinf(LFO->currentPhase * 2.0f * M_PI));
+            // sample = (2.0f / M_PI) * asinf(sinf(LFO->currentPhase * 2.0f * M_PI)); 
+            sample = 4.0f * fabsf(LFO->currentPhase - 0.5f) - 1.0f; //check
             break;
-        case 3: // Sawtooth wave
-            sample = (2.0f * (LFO->currentPhase - floorf(LFO->currentPhase + 0.5f)));
+        case 3: // Sawtooth wave (rising)
+            // sample = (2.0f * (LFO->currentPhase - floorf(LFO->currentPhase + 0.5f))); 
+            sample = 2.0f * LFO->currentPhase - 1.0f; //check
             break;
         default:
             // sample = 0.0f; // Default to silence for unknown waveform types
@@ -248,6 +272,10 @@ audio_element_handle_t LFO_init(LFO_cfg_t *config)
     AUDIO_MEM_CHECK(TAG, el, {audio_free(LFO); return NULL;});
     LFO->samplerate = config->samplerate;
     LFO->channel = config->channel;
+    LFO->frequency = 220.0f; //custom
+    LFO->waveform = 0;  //custom
+    LFO->currentPhase = 0.0f; //custom
+    LFO->samplingPeriod = 1.0f / LFO->samplerate; //custom
     audio_element_setdata(el, LFO);
     audio_element_info_t info = {0};
     audio_element_setinfo(el, &info);

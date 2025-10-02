@@ -7,6 +7,7 @@
 #include "esp_err.h"
 #include "audio_element.h"
 #include "audio_common.h"
+#include "LFO.h" //custom
 
 
 #ifdef __cplusplus
@@ -32,6 +33,8 @@ typedef struct myDelay_cfg {
 #define MYDELAY_TASK_PRIO        (5)
 #define MYDELAY_RINGBUFFER_SIZE  (8 * 1024)
 
+#define MYDELAY_MAX_DELAY_TIME       (2.0f) //custom
+
 
 #define DEFAULT_MYDELAY_CONFIG() {                \
         .samplerate  = 48000,                      \
@@ -54,6 +57,18 @@ typedef struct myDelay_cfg {
  *             ESP_FAIL
  */
 esp_err_t myDelay_set_info(audio_element_handle_t self, int rate, int ch);
+
+/**
+ * @brief      Set the LFO modulation parameters.
+ *
+ * @param      self       Audio element handle
+ * @param      modCfg     The LFO modulation configuration
+ *
+ * @return     
+ *             ESP_OK
+ *             ESP_FAIL
+ */
+esp_err_t myDelay_set_LFO_modulation(audio_element_handle_t self, LFO_cfg_t *modCfg); //custom
 
 /**
  * @brief      Create an Audio Element handle that delay incoming data.
