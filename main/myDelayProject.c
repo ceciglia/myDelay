@@ -65,8 +65,8 @@ void app_main(void)
     i2s_cfg.std_cfg.clk_cfg.sample_rate_hz = 48000;
     // i2s_cfg.std_cfg.slot_cfg.data_bit_width = I2S_DATA_BIT_WIDTH_24BIT;
     // i2s_cfg.std_cfg.slot_cfg.slot_bit_width = I2S_SLOT_BIT_WIDTH_32BIT;
-    i2s_cfg.std_cfg.slot_cfg.slot_mode = I2S_SLOT_MODE_STEREO;
-    i2s_cfg.std_cfg.slot_cfg.slot_mask = I2S_STD_SLOT_BOTH;
+    // i2s_cfg.std_cfg.slot_cfg.slot_mode = I2S_SLOT_MODE_STEREO;
+    // i2s_cfg.std_cfg.slot_cfg.slot_mask = I2S_STD_SLOT_BOTH;
     i2s_cfg.chan_cfg.role = I2S_ROLE_MASTER; 
     i2s_cfg.std_cfg.slot_cfg.ws_pol = false;
     // i2s_cfg.chan_cfg.dma_desc_num = 3;
@@ -84,8 +84,8 @@ void app_main(void)
     i2s_cfg_read.std_cfg.clk_cfg.sample_rate_hz = 48000;
     // i2s_cfg_read.std_cfg.slot_cfg.data_bit_width = I2S_DATA_BIT_WIDTH_24BIT;
     // i2s_cfg_read.std_cfg.slot_cfg.slot_bit_width = I2S_SLOT_BIT_WIDTH_32BIT;
-    i2s_cfg_read.std_cfg.slot_cfg.slot_mode = I2S_SLOT_MODE_STEREO;
-    i2s_cfg_read.std_cfg.slot_cfg.slot_mask = I2S_STD_SLOT_BOTH;
+    // i2s_cfg_read.std_cfg.slot_cfg.slot_mode = I2S_SLOT_MODE_STEREO;
+    // i2s_cfg_read.std_cfg.slot_cfg.slot_mask = I2S_STD_SLOT_BOTH;
     i2s_cfg_read.chan_cfg.role = I2S_ROLE_MASTER; 
     i2s_cfg_read.std_cfg.slot_cfg.ws_pol = false;
     // i2s_cfg_read.chan_cfg.dma_desc_num = 3;
@@ -96,14 +96,18 @@ void app_main(void)
     ESP_LOGI(TAG, "R data_bit_width in i2s_stream_reader:%d", (int) i2s_cfg_read.std_cfg.slot_cfg.data_bit_width);
     ESP_LOGI(TAG, "R slot_mode in i2s_stream_reader:%d", (int) i2s_cfg_read.std_cfg.slot_cfg.slot_mode);
 
+    myDelay_cfg_t myDelay_cfg = DEFAULT_MYDELAY_CONFIG();
+    delay = myDelay_init(&myDelay_cfg);
+
     ESP_LOGI(TAG, "[3.3] Register all elements to audio pipeline");
     audio_pipeline_register(pipeline, i2s_stream_reader, "i2s_read");
+    audio_pipeline_register(pipeline, i2s_stream_reader, "delay");
     // audio_pipeline_register(pipeline, filter_upsample_el, "filter_upsample");
     audio_pipeline_register(pipeline, i2s_stream_writer, "i2s_write");
 
     ESP_LOGI(TAG, "[3.4] Link it together [codec_chip]-->i2s_stream_reader-->i2s_stream_writer-->[codec_chip]");
-    const char *link_tag[2] = {"i2s_read", "i2s_write"};
-    audio_pipeline_link(pipeline, &link_tag[0], 2);
+    const char *link_tag[3] = {"i2s_read", "delay", "i2s_write"};
+    audio_pipeline_link(pipeline, &link_tag[0], 3);
 
     ESP_LOGI(TAG, "[ 4 ] Set up  event listener");
     audio_event_iface_cfg_t evt_cfg = AUDIO_EVENT_IFACE_DEFAULT_CFG();
@@ -146,6 +150,7 @@ void app_main(void)
 
     audio_pipeline_unregister(pipeline, i2s_stream_reader);
     // audio_pipeline_unregister(pipeline, filter_upsample_el);
+    audio_pipeline_unregister(pipeline, delay);
     audio_pipeline_unregister(pipeline, i2s_stream_writer);
 
     /* Terminate the pipeline before removing the listener */
@@ -157,6 +162,7 @@ void app_main(void)
     /* Release all resources */
     audio_pipeline_deinit(pipeline);
     audio_element_deinit(i2s_stream_reader);
+    audio_element_deinit(delay);
     // audio_element_deinit(filter_upsample_el);
     audio_element_deinit(i2s_stream_writer);
 }
