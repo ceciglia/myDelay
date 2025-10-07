@@ -33,7 +33,7 @@ typedef struct myDelay_cfg {
 #define MYDELAY_TASK_PRIO        (5)
 #define MYDELAY_RINGBUFFER_SIZE  (8 * 1024)
 
-#define MYDELAY_MAX_DELAY_TIME       (2.0f) //custom
+#define MYDELAY_MAX_DELAY_TIME       (1.0f) //custom
 
 
 #define DEFAULT_MYDELAY_CONFIG() {                \

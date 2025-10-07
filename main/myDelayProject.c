@@ -50,7 +50,7 @@ void app_main(void)
         .bits = AUDIO_HAL_BIT_LENGTH_16BITS,
     };     
 
-    audio_hal_set_volume(board_handle->audio_hal, 80);   // volume 0–100%
+    audio_hal_set_volume(board_handle->audio_hal, 100);   // volume 0–100%
     audio_hal_codec_iface_config(board_handle->audio_hal, AUDIO_HAL_CODEC_MODE_BOTH, &iface);
     audio_hal_ctrl_codec(board_handle->audio_hal, AUDIO_HAL_CODEC_MODE_BOTH, AUDIO_HAL_CTRL_START);
     
@@ -65,13 +65,14 @@ void app_main(void)
     i2s_cfg.std_cfg.clk_cfg.sample_rate_hz = 48000;
     // i2s_cfg.std_cfg.slot_cfg.data_bit_width = I2S_DATA_BIT_WIDTH_24BIT;
     // i2s_cfg.std_cfg.slot_cfg.slot_bit_width = I2S_SLOT_BIT_WIDTH_32BIT;
-    // i2s_cfg.std_cfg.slot_cfg.slot_mode = I2S_SLOT_MODE_STEREO;
-    // i2s_cfg.std_cfg.slot_cfg.slot_mask = I2S_STD_SLOT_BOTH;
+    i2s_cfg.std_cfg.slot_cfg.slot_mode = I2S_SLOT_MODE_MONO;
+    i2s_cfg.std_cfg.slot_cfg.slot_mask = I2S_STD_SLOT_RIGHT;
     i2s_cfg.chan_cfg.role = I2S_ROLE_MASTER; 
-    i2s_cfg.std_cfg.slot_cfg.ws_pol = false;
+    // i2s_cfg.std_cfg.slot_cfg.ws_pol = false;
     // i2s_cfg.chan_cfg.dma_desc_num = 3;
     // i2s_cfg.chan_cfg.dma_frame_num = 312;
     // i2s_cfg.std_cfg.clk_cfg.mclk_multiple = I2S_MCLK_MULTIPLE_384;
+    i2s_cfg.volume = 90; 
     i2s_stream_writer = i2s_stream_init(&i2s_cfg);
     ESP_LOGI(TAG, "W sample rate in i2s_stream_writer:%d", (int) i2s_cfg.std_cfg.clk_cfg.sample_rate_hz);
     ESP_LOGI(TAG, "W data_bit_width in i2s_stream_writer:%d", (int) i2s_cfg.std_cfg.slot_cfg.data_bit_width);
@@ -84,13 +85,14 @@ void app_main(void)
     i2s_cfg_read.std_cfg.clk_cfg.sample_rate_hz = 48000;
     // i2s_cfg_read.std_cfg.slot_cfg.data_bit_width = I2S_DATA_BIT_WIDTH_24BIT;
     // i2s_cfg_read.std_cfg.slot_cfg.slot_bit_width = I2S_SLOT_BIT_WIDTH_32BIT;
-    // i2s_cfg_read.std_cfg.slot_cfg.slot_mode = I2S_SLOT_MODE_STEREO;
-    // i2s_cfg_read.std_cfg.slot_cfg.slot_mask = I2S_STD_SLOT_BOTH;
+    i2s_cfg_read.std_cfg.slot_cfg.slot_mode = I2S_SLOT_MODE_MONO;
+    i2s_cfg_read.std_cfg.slot_cfg.slot_mask = I2S_STD_SLOT_RIGHT;
     i2s_cfg_read.chan_cfg.role = I2S_ROLE_MASTER; 
-    i2s_cfg_read.std_cfg.slot_cfg.ws_pol = false;
+    // i2s_cfg_read.std_cfg.slot_cfg.ws_pol = false;
     // i2s_cfg_read.chan_cfg.dma_desc_num = 3;
     // i2s_cfg_read.chan_cfg.dma_frame_num = 312;
     // i2s_cfg_read.std_cfg.clk_cfg.mclk_multiple = I2S_MCLK_MULTIPLE_384;
+    i2s_cfg_read.volume = 90;
     i2s_stream_reader = i2s_stream_init(&i2s_cfg_read);
     ESP_LOGI(TAG, "R sample rate in i2s_stream_reader:%d", (int) i2s_cfg_read.std_cfg.clk_cfg.sample_rate_hz);
     ESP_LOGI(TAG, "R data_bit_width in i2s_stream_reader:%d", (int) i2s_cfg_read.std_cfg.slot_cfg.data_bit_width);
@@ -101,7 +103,7 @@ void app_main(void)
 
     ESP_LOGI(TAG, "[3.3] Register all elements to audio pipeline");
     audio_pipeline_register(pipeline, i2s_stream_reader, "i2s_read");
-    audio_pipeline_register(pipeline, i2s_stream_reader, "delay");
+    audio_pipeline_register(pipeline, delay, "delay");
     // audio_pipeline_register(pipeline, filter_upsample_el, "filter_upsample");
     audio_pipeline_register(pipeline, i2s_stream_writer, "i2s_write");
 

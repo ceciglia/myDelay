@@ -130,18 +130,41 @@ static esp_err_t myDelay_open(audio_element_handle_t self)
         ESP_LOGE(TAG, "calloc buffer failed. (line %d)", __LINE__);
         return ESP_ERR_NO_MEM;
     }
-    memset(myDelay->buf, 0, BUF_SIZE);
+    memset(myDelay->buf, 0, BUF_SIZE); 
 
-    //custom
-    myDelay->delayMemory = (unsigned char *)calloc(1, BUF_SIZE);
+    // // work in bytes
+    myDelay->memorySize = (int)(MYDELAY_MAX_DELAY_TIME * myDelay->samplerate)  + BUF_SIZE / sizeof(int16_t) ; //custom: è in campioni
+    
+    // size_t delayBufferSize = myDelay->memorySize * sizeof(int16_t); //custom
+    // ESP_LOGI(TAG, "myDelay memory size in samples: %d", delayBufferSize);
+    // //custom
+    // myDelay->delayMemory = (unsigned char *)calloc(1, BUF_SIZE); //custom
+    // if (myDelay->delayMemory == NULL) {
+    //     ESP_LOGE(TAG, "calloc buffer failed. (line %d)", __LINE__);
+    //     return ESP_ERR_NO_MEM;
+    // }
+    // memset(myDelay->delayMemory, 0, BUF_SIZE);
+    
+    //versione con PSRAM
+    size_t delay_bytes = (size_t)myDelay->memorySize * sizeof(int16_t); //custom: è in byte
+    ESP_LOGI(TAG, "myDelay memory size in bytes: %u", (unsigned)delay_bytes);
+
+    // Sostituisci calloc() con heap_caps_calloc() e il flag MALLOC_CAP_SPIRAM
+    myDelay->delayMemory = (unsigned char *)heap_caps_calloc(1, delay_bytes, MALLOC_CAP_SPIRAM); 
     if (myDelay->delayMemory == NULL) {
-        ESP_LOGE(TAG, "calloc buffer failed. (line %d)", __LINE__);
+        ESP_LOGE(TAG, "calloc FAILED! Could not allocate %u bytes in PSRAM.", delay_bytes);
+        // Pulizia
+        audio_free(myDelay->buf); 
+        myDelay->buf = NULL;
         return ESP_ERR_NO_MEM;
     }
-    memset(myDelay->delayMemory, 0, BUF_SIZE);
-    
-    myDelay->memorySize = (int) (MYDELAY_MAX_DELAY_TIME * myDelay->samplerate) + BUF_SIZE ; //custom
-    myDelay->feedback = 0.0f; //custom
+    // Azzeramento usando il numero di byte (funziona anche su PSRAM)
+    memset(myDelay->delayMemory, 0, delay_bytes);
+    // end versione con PSRAM
+
+
+
+    myDelay->feedback = 0.5f; //custom
     myDelay->oldSample = 0.0f; //custom
 
     //end custom
@@ -162,10 +185,17 @@ static esp_err_t myDelay_close(audio_element_handle_t self)
 {
     ESP_LOGD(TAG, "myDelay_close");
     myDelay_t *myDelay = (myDelay_t *)audio_element_getdata(self);
-    if(myDelay->buf == NULL){
+    if(myDelay->buf != NULL){ //custom
         audio_free(myDelay->buf);
         myDelay->buf = NULL;
-    }   
+    }  
+    
+    //custom
+    if(myDelay->delayMemory != NULL){
+        audio_free(myDelay->delayMemory);
+        myDelay->delayMemory = NULL;
+    }  
+    //end custom
 
 #ifdef MYDELAY_MEMORY_ANALYSIS
     AUDIO_MEM_SHOW(TAG);
@@ -183,33 +213,33 @@ static int myDelay_process(audio_element_handle_t self, char *in_buffer, int in_
     int ret = 0;
 
     int r_size = 0;
-    int dm_size = 0;    //custom
     if (myDelay->at_eof == 0) {
 #ifdef DEBUG_MYDELAY_ENC_ISSUE
         r_size = fread((char *)myDelay->buf, 1, BUF_SIZE, infile);
-        dm_size = fread((char *)myDelay->delayMemory, 1, BUF_SIZE, infile); //custom
 #else
-        r_size = audio_element_input(self, (char *)myDelay->buf, BUF_SIZE);
-        dm_size = audio_element_input(self, (char *)myDelay->delayMemory, BUF_SIZE);
+        r_size = audio_element_input(self, (char *)myDelay->buf, BUF_SIZE); //custom
 #endif
     }
-    if (r_size > 0 || dm_size > 0) { //custom   
-        if (r_size != BUF_SIZE || dm_size != BUF_SIZE) { //custom
+    if (r_size > 0) {    
+        if (r_size != BUF_SIZE) { 
             myDelay->at_eof = 1;
         }
         myDelay->byte_num += r_size;
-        myDelay->byte_num += dm_size; //custom  
 
-        unsigned char *pbuf = myDelay->buf;
-        unsigned char *pDelayMem = myDelay->delayMemory; //custom
+        // unsigned char *pbuf = myDelay->buf;
+        // unsigned char *pDelayMem = myDelay->delayMemory; //custom
         // unsigned char *pMod = myDelay->modulation.buf; //custom ERROREEEEEEEEEEEEEEEEEEEEE
+
+        int16_t *pbuf16 = (int16_t *)myDelay->buf; //custom
+        int16_t *pDelayMem16 = (int16_t *)myDelay->delayMemory; //custom
 
         audiosample16_t audiosample;
         float dt = 0.5f; //custom da cancellare
 
-        for(int i=0;i<r_size;i+=2){
+        for(int i=0; i<r_size / 2; i++){ //custom 
             // vers 1
-            float readIndex = myDelay->writeIndex - (dt * myDelay->samplerate) ; //custom
+            float inputSample = (float)pbuf16[i] / 32767.0f; //custom
+            float readIndex = (float)myDelay->writeIndex - (dt * (float)myDelay->samplerate) ; //custom
             int integerPart = (int) readIndex; //custom
             float fractionalPart = readIndex - integerPart; //custom
             float alpha = fractionalPart / (2.0f - fractionalPart); //custom
@@ -217,14 +247,25 @@ static int myDelay_process(audio_element_handle_t self, char *in_buffer, int in_
             int A = (integerPart + myDelay->memorySize) % myDelay->memorySize; //custom
             int B = (A + 1) % myDelay->memorySize; //custom
 
-            *(pDelayMem - i + myDelay->writeIndex * 2) = *(pbuf + i); //custom
-
-            float sampleValue = alpha * ((float)*(pDelayMem - i + B * 2) - myDelay->oldSample) + (float)*(pDelayMem - i + A * 2); //custom
+            float sample_A_float = (float)pDelayMem16[A] / 32767.0f;
+            float sample_B_float = (float)pDelayMem16[B] / 32767.0f;
+            float sampleValue = alpha * (sample_B_float - myDelay->oldSample) + sample_A_float; 
+            
             myDelay->oldSample = sampleValue; //custom
 
-            audiosample.audiosampleint16 = (int16_t)(sampleValue * 32767.0f);
-            *(pbuf + i) = audiosample.audiosampleint16;
-            *(pDelayMem - i + myDelay->writeIndex * 2) = (int16_t)*(pDelayMem - i + myDelay->writeIndex * 2) + (int16_t)(audiosample.audiosampleint16 * myDelay->feedback); //custom
+            float dw = 0.5f; // dry wet mix
+            float outputSample = sampleValue * dw + inputSample * (1.0f - dw); //custom
+
+            // controllo
+            if (outputSample > 1.0f) outputSample = 1.0f;
+            else if (outputSample < -1.0f) outputSample = -1.0f;
+
+            audiosample.audiosampleint16 = (int16_t)(outputSample * 32767.0f);
+            pbuf16[i] = audiosample.audiosampleint16;
+
+
+            // pDelayMem16[myDelay->writeIndex] = pDelayMem16[myDelay->writeIndex] + pbuf16[i] * (int16_t)(myDelay->feedback * 32767.0f);
+            pDelayMem16[myDelay->writeIndex] = pbuf16[i];
 
             myDelay->writeIndex = (myDelay->writeIndex + 1) % myDelay->memorySize; //custom
             // end vers 1
