@@ -17,7 +17,7 @@ extern "C"
 
 
 /**
- * @brief      Delay Configuration
+ * @brief      LFO Configuration
  */
 typedef struct LFO_cfg {
     int samplerate;  /*!< Audio sample rate (in Hz)*/
@@ -79,6 +79,17 @@ esp_err_t LFO_set_waveform(audio_element_handle_t self, int type);
  *             ESP_FAIL
  */
 esp_err_t LFO_set_frequency(audio_element_handle_t self, float freq);
+
+/**
+ * @brief      Get the next audio sample from the LFO.  
+ * 
+ * @param      self       Audio element handle
+ * @param      outSample  Pointer to the output sample
+ * @return
+ *            ESP_OK
+ *           ESP_FAIL
+ */
+esp_err_t LFO_get_next_sample(audio_element_handle_t self, float *outSample); 
 
 /**
  * @brief      Create an Audio Element handle that LFO incoming data.

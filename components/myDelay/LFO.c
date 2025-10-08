@@ -10,7 +10,7 @@
 #include "audio_type_def.h"
 static const char *TAG = "LFO";
 
-#define BUF_SIZE (128)
+// #define BUF_SIZE (128)
 
 typedef struct LFO {
     int  samplerate;
@@ -19,19 +19,19 @@ typedef struct LFO {
     int waveform;  //custom
     float currentPhase; //custom
     float samplingPeriod; //custom
-    unsigned char *buf;
-    int  byte_num;
-    int  at_eof;
+    // unsigned char *buf;
+    // int  byte_num;
+    // int  at_eof;
 } LFO_t;
 
-typedef union {
-	short audiosample16;
-    int16_t audiosampleint16; //custom
-	struct audiosample16_bytes{
-		unsigned h	:8;
-		unsigned l	:8;
-	} audiosample16_bytes;
-} audiosample16_t;
+// typedef union {
+// 	short audiosample16;
+//     int16_t audiosampleint16; //custom
+// 	struct audiosample16_bytes{
+// 		unsigned h	:8;
+// 		unsigned l	:8;
+// 	} audiosample16_bytes;
+// } audiosample16_t;
 
 #ifdef DEBUG_LFO_ENC_ISSUE
 static FILE *infile;
@@ -99,18 +99,26 @@ static esp_err_t LFO_open(audio_element_handle_t self)
         LFO->samplerate = info.sample_rates;
         LFO->channel = info.channels;
     }
-    LFO->at_eof = 0;
+
+    // LFO->at_eof = 0;
+
     if (is_valid_LFO_samplerate(LFO->samplerate) != ESP_OK
         || is_valid_LFO_channel(LFO->channel) != ESP_OK) {
         return ESP_ERR_INVALID_ARG;
     }
-    LFO->buf = (unsigned char *)calloc(1, BUF_SIZE);
-    if (LFO->buf == NULL) {
-        ESP_LOGE(TAG, "calloc buffer failed. (line %d)", __LINE__);
-        return ESP_ERR_NO_MEM;
-    }
-    memset(LFO->buf, 0, BUF_SIZE);
 
+    // LFO->buf = (unsigned char *)calloc(1, BUF_SIZE);
+    // if (LFO->buf == NULL) {
+    //     ESP_LOGE(TAG, "calloc buffer failed. (line %d)", __LINE__);
+    //     return ESP_ERR_NO_MEM;
+    // }
+    // memset(LFO->buf, 0, BUF_SIZE);
+
+    LFO->currentPhase = 0.0f; 
+    LFO->samplingPeriod = 1.0f / (float)LFO->samplerate;
+    LFO->frequency = 220.0f; //custom
+    LFO->waveform = 2;  //custom: triangle wave
+    
 #ifdef DEBUG_LFO_ENC_ISSUE
     char fileName[100] = {'//', 's', 'd', 'c', 'a', 'r', 'd', '//', 't', 'e', 's', 't', '.', 'p', 'c', 'm', '\0'};
     infile = fopen(fileName, "rb");
@@ -126,11 +134,11 @@ static esp_err_t LFO_open(audio_element_handle_t self)
 static esp_err_t LFO_close(audio_element_handle_t self)
 {
     ESP_LOGD(TAG, "LFO_close");
-    LFO_t *LFO = (LFO_t *)audio_element_getdata(self);
-    if(LFO->buf == NULL){
-        audio_free(LFO->buf);
-        LFO->buf = NULL;
-    }   
+    // LFO_t *LFO = (LFO_t *)audio_element_getdata(self);
+    // if(LFO->buf == NULL){
+    //     audio_free(LFO->buf);
+    //     LFO->buf = NULL;
+    // }   
 
 #ifdef LFO_MEMORY_ANALYSIS
     AUDIO_MEM_SHOW(TAG);
@@ -177,7 +185,7 @@ esp_err_t LFO_get_next_sample(audio_element_handle_t self, float *outSample)
             break;
         case 1: // Square wave
             // sample = (sinf(LFO->currentPhase * 2.0f * M_PI) >= 0.0f) ? 1.0f : -1.0f;
-            sample = (LFO->currentPhase >= 0.0f) ? 1.0f : -1.0f;
+            sample = (LFO->currentPhase >= 0.5f) ? 1.0f : -1.0f;
             break;
         case 2: // Triangle wave
             // sample = (2.0f / M_PI) * asinf(sinf(LFO->currentPhase * 2.0f * M_PI)); 
@@ -203,46 +211,12 @@ esp_err_t LFO_get_next_sample(audio_element_handle_t self, float *outSample)
 
 static int LFO_process(audio_element_handle_t self, char *in_buffer, int in_len)
 {
-    LFO_t *LFO = (LFO_t *)audio_element_getdata(self);
-    int ret = 0;
-
-    int r_size = 0;    
-    if (LFO->at_eof == 0) {
-#ifdef DEBUG_LFO_ENC_ISSUE
-        r_size = fread((char *)LFO->buf, 1, BUF_SIZE, infile);
-#else
-        r_size = audio_element_input(self, (char *)LFO->buf, BUF_SIZE);
-#endif
-    }
+    int r_size = audio_element_input(self, in_buffer, in_len);
     if (r_size > 0) {
-        if (r_size != BUF_SIZE) {
-            LFO->at_eof = 1;
-        }
-        LFO->byte_num += r_size;
-
-        unsigned char *pbuf = LFO->buf;
-        
-        float sample = 0.0f;
-        for(int i=0;i<r_size;i+=2){
-            audiosample16_t audiosample;
-            audiosample.audiosample16_bytes.h = *pbuf;
-            audiosample.audiosample16_bytes.l = *(pbuf+1);
-            sample = (float)audiosample.audiosample16 / 32767.0f; 
-            LFO_get_next_sample(self, &sample); 
-            audiosample.audiosample16 = (short)(sample * 32767.0f); 
-
-            // process audio samples here e.g. scale by 1/16 (attenuation):
-            // audiosample.audiosample16 = audiosample.audiosample16>>4;
-
-            *pbuf = audiosample.audiosample16_bytes.h;
-            *(pbuf+1) = audiosample.audiosample16_bytes.l;
-            pbuf+=2;
-        }
-        ret = audio_element_output(self, (char *)LFO->buf, BUF_SIZE);
-    } else {
-        ret = r_size;
+        audio_element_output(self, in_buffer, r_size);
     }
-    return ret;
+    return r_size;
+    
 }
 
 audio_element_handle_t LFO_init(LFO_cfg_t *config)
@@ -272,10 +246,6 @@ audio_element_handle_t LFO_init(LFO_cfg_t *config)
     AUDIO_MEM_CHECK(TAG, el, {audio_free(LFO); return NULL;});
     LFO->samplerate = config->samplerate;
     LFO->channel = config->channel;
-    LFO->frequency = 220.0f; //custom
-    LFO->waveform = 0;  //custom
-    LFO->currentPhase = 0.0f; //custom
-    LFO->samplingPeriod = 1.0f / LFO->samplerate; //custom
     audio_element_setdata(el, LFO);
     audio_element_info_t info = {0};
     audio_element_setinfo(el, &info);

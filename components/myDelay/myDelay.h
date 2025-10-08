@@ -33,7 +33,7 @@ typedef struct myDelay_cfg {
 #define MYDELAY_TASK_PRIO        (5)
 #define MYDELAY_RINGBUFFER_SIZE  (8 * 1024)
 
-#define MYDELAY_MAX_DELAY_TIME       (1.0f) //custom
+#define MYDELAY_MAX_DELAY_TIME       (1.5f) //custom
 
 
 #define DEFAULT_MYDELAY_CONFIG() {                \
@@ -58,17 +58,28 @@ typedef struct myDelay_cfg {
  */
 esp_err_t myDelay_set_info(audio_element_handle_t self, int rate, int ch);
 
+// /**
+//  * @brief      Set the LFO modulation parameters.
+//  *
+//  * @param      self       Audio element handle
+//  * @param      modCfg     The LFO modulation configuration
+//  *
+//  * @return     
+//  *             ESP_OK
+//  *             ESP_FAIL
+//  */
+// esp_err_t myDelay_set_LFO_modulation(audio_element_handle_t self, LFO_cfg_t *modCfg); //custom
+
+
 /**
- * @brief      Set the LFO modulation parameters.
+ * @brief 	   Assign the LFO handle to the Delay element for modulation.
  *
- * @param      self       Audio element handle
- * @param      modCfg     The LFO modulation configuration
+ * @param 	   self 	    Audio element handle (myDelay)
+ * @param 	   lfo_handle   Audio element handle (LFO)
  *
- * @return     
- *             ESP_OK
- *             ESP_FAIL
+ * @return 	   ESP_OK or ESP_FAIL
  */
-esp_err_t myDelay_set_LFO_modulation(audio_element_handle_t self, LFO_cfg_t *modCfg); //custom
+esp_err_t myDelay_set_lfo_handle(audio_element_handle_t self, audio_element_handle_t lfo_handle);
 
 /**
  * @brief      Create an Audio Element handle that delay incoming data.

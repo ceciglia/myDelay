@@ -22,7 +22,7 @@ typedef struct myDelay {
     int writeIndex;   //custom
     float oldSample; //custom
     float feedback;   //custom
-    // LFO_t* modulation; //custom
+    audio_element_handle_t LFO_handle; //custom
     int  byte_num;
     int  at_eof;
 } myDelay_t;
@@ -82,6 +82,7 @@ esp_err_t myDelay_set_info(audio_element_handle_t self, int rate, int ch)
 }
 
 //custom
+
 // esp_err_t myDelay_set_LFO_modulation(audio_element_handle_t self, LFO_cfg_t *modCfg)
 // {
 //     myDelay_t *myDelay = (myDelay_t *)audio_element_getdata(self);
@@ -97,6 +98,23 @@ esp_err_t myDelay_set_info(audio_element_handle_t self, int rate, int ch)
 //     myDelay->modulation = LFO;
 //     return ESP_OK;
 // }
+
+esp_err_t myDelay_set_lfo_handle(audio_element_handle_t self, audio_element_handle_t lfo_handle) {
+    myDelay_t *myDelay = (myDelay_t *)audio_element_getdata(self);
+    if (lfo_handle == NULL) {
+        ESP_LOGE(TAG, "lfo_handle is NULL. (line %d)", __LINE__);
+        return ESP_ERR_INVALID_ARG;
+    }
+    // LFO_t *LFO = (LFO_t *)audio_element_getdata(lfo_handle);
+    // if (LFO == NULL) {
+    //     ESP_LOGE(TAG, "The provided handle is not a valid LFO element. (line %d)", __LINE__);
+    //     return ESP_ERR_INVALID_ARG;
+    // }
+    myDelay->LFO_handle = lfo_handle;
+    ESP_LOGI(TAG, "LFO handle assigned to myDelay.");
+    return ESP_OK;
+}
+
 //end custom
 
 static esp_err_t myDelay_destroy(audio_element_handle_t self)
@@ -132,7 +150,6 @@ static esp_err_t myDelay_open(audio_element_handle_t self)
     }
     memset(myDelay->buf, 0, BUF_SIZE); 
 
-    // // work in bytes
     myDelay->memorySize = (int)(MYDELAY_MAX_DELAY_TIME * myDelay->samplerate)  + BUF_SIZE / sizeof(int16_t) ; //custom: è in campioni
     
     // size_t delayBufferSize = myDelay->memorySize * sizeof(int16_t); //custom
@@ -164,7 +181,7 @@ static esp_err_t myDelay_open(audio_element_handle_t self)
 
 
 
-    myDelay->feedback = 0.5f; //custom
+    myDelay->feedback = 0.2f; //custom
     myDelay->oldSample = 0.0f; //custom
 
     //end custom
@@ -234,8 +251,9 @@ static int myDelay_process(audio_element_handle_t self, char *in_buffer, int in_
         int16_t *pDelayMem16 = (int16_t *)myDelay->delayMemory; //custom
 
         audiosample16_t audiosample;
-        float dt = 0.5f; //custom da cancellare
-        float dryWetRatio = 0.5f; // custom dry wet mix
+        audiosample16_t modsample;
+        float dt = 0.8f; //custom DA CANCELLARE
+        float dryWetRatio = 0.5f; // custom dry wet mix -> DA ESPORRE
 
         for(int i=0; i<r_size / 2; i++){ //custom 
             // vers 1
@@ -248,24 +266,26 @@ static int myDelay_process(audio_element_handle_t self, char *in_buffer, int in_
             int A = (integerPart + myDelay->memorySize) % myDelay->memorySize; //custom
             int B = (A + 1) % myDelay->memorySize; //custom
 
+            pDelayMem16[myDelay->writeIndex] = pbuf16[i]; //custom
+
             float sample_A_float = (float)pDelayMem16[A] / 32767.0f;
             float sample_B_float = (float)pDelayMem16[B] / 32767.0f;
             float sampleValue = alpha * (sample_B_float - myDelay->oldSample) + sample_A_float; 
             
             myDelay->oldSample = sampleValue; //custom
-
-            float outputSample = sampleValue * sqrt(1 - dryWetRatio) + inputSample * sqrt(dryWetRatio); //custom
-
-            // controllo
-            if (outputSample > 1.0f) outputSample = 1.0f;
-            else if (outputSample < -1.0f) outputSample = -1.0f;
+            
+            float outputSample = sampleValue * sqrtf(1 - dryWetRatio) + inputSample * sqrtf(dryWetRatio); //custom
+            
+            if (outputSample > 1.0f) outputSample = 1.0f; // custom
+            else if (outputSample < -1.0f) outputSample = -1.0f; //custom
 
             audiosample.audiosampleint16 = (int16_t)(outputSample * 32767.0f);
             pbuf16[i] = audiosample.audiosampleint16;
 
-
-            // pDelayMem16[myDelay->writeIndex] = pDelayMem16[myDelay->writeIndex] + pbuf16[i] * (int16_t)(myDelay->feedback * 32767.0f);
-            pDelayMem16[myDelay->writeIndex] = pbuf16[i];
+            modsample.audiosampleint16 = pDelayMem16[myDelay->writeIndex]; //custom: da togliere
+            float delayedSample = inputSample + sampleValue * myDelay->feedback; //custom
+            pDelayMem16[myDelay->writeIndex] = (int16_t)(delayedSample * 32767.0f);
+            // pDelayMem16[myDelay->writeIndex] = pbuf16[i]; // da cancellare
 
             myDelay->writeIndex = (myDelay->writeIndex + 1) % myDelay->memorySize; //custom
             // end vers 1
