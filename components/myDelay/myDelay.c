@@ -235,6 +235,7 @@ static int myDelay_process(audio_element_handle_t self, char *in_buffer, int in_
 
         audiosample16_t audiosample;
         float dt = 0.5f; //custom da cancellare
+        float dryWetRatio = 0.5f; // custom dry wet mix
 
         for(int i=0; i<r_size / 2; i++){ //custom 
             // vers 1
@@ -253,8 +254,7 @@ static int myDelay_process(audio_element_handle_t self, char *in_buffer, int in_
             
             myDelay->oldSample = sampleValue; //custom
 
-            float dw = 0.5f; // dry wet mix
-            float outputSample = sampleValue * dw + inputSample * (1.0f - dw); //custom
+            float outputSample = sampleValue * sqrt(1 - dryWetRatio) + inputSample * sqrt(dryWetRatio); //custom
 
             // controllo
             if (outputSample > 1.0f) outputSample = 1.0f;

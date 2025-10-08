@@ -53,7 +53,7 @@ void app_main(void)
     audio_hal_set_volume(board_handle->audio_hal, 100);   // volume 0–100%
     audio_hal_codec_iface_config(board_handle->audio_hal, AUDIO_HAL_CODEC_MODE_BOTH, &iface);
     audio_hal_ctrl_codec(board_handle->audio_hal, AUDIO_HAL_CODEC_MODE_BOTH, AUDIO_HAL_CTRL_START);
-    
+    audio_hal_enable_pa(board_handle->audio_hal, true); 
 
     ESP_LOGI(TAG, "[ 2 ] Create audio pipeline for playback");
     audio_pipeline_cfg_t pipeline_cfg = DEFAULT_AUDIO_PIPELINE_CONFIG();
