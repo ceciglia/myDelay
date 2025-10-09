@@ -6,37 +6,15 @@
 #include "i2s_stream.h"
 #include "board.h"
 #include "myDelay.h"
-// #include "filter_resample.h"
 
 
 static const char *TAG = "MYDELAYPROJECT";
-
-// #define SAVE_FILE_RATE      48000
-// #define SAVE_FILE_CHANNEL   2
-// #define SAVE_FILE_BITS      24
-
-// #define RECORD_RATE         44100
-// #define RECORD_CHANNEL      2
-// #define RECORD_BITS         16
-
-// static audio_element_handle_t create_filter(int dest_rate, int dest_channel, int mode)
-// {
-//     rsp_filter_cfg_t rsp_cfg = DEFAULT_RESAMPLE_FILTER_CONFIG();
-//     // rsp_cfg.src_rate = source_rate;
-//     // rsp_cfg.src_ch = source_channel;
-//     rsp_cfg.dest_rate = dest_rate;
-//     rsp_cfg.dest_ch = dest_channel;
-//     rsp_cfg.mode = mode;
-//     rsp_cfg.complexity = 0;
-//     return rsp_filter_init(&rsp_cfg);
-// }
 
 void app_main(void)
 {
     audio_pipeline_handle_t pipeline;
     audio_element_handle_t i2s_stream_writer, i2s_stream_reader, delay;
-    // audio_element_handle_t filter_upsample_el = create_filter(SAVE_FILE_RATE, SAVE_FILE_CHANNEL, RESAMPLE_ENCODE_MODE);
-
+    
     esp_log_level_set("*", ESP_LOG_INFO);
     esp_log_level_set(TAG, ESP_LOG_DEBUG);
     
@@ -106,7 +84,6 @@ void app_main(void)
     ESP_LOGI(TAG, "[3.3] Register all elements to audio pipeline");
     audio_pipeline_register(pipeline, i2s_stream_reader, "i2s_read");
     audio_pipeline_register(pipeline, delay, "delay");
-    // audio_pipeline_register(pipeline, filter_upsample_el, "filter_upsample");
     audio_pipeline_register(pipeline, i2s_stream_writer, "i2s_write");
 
     ESP_LOGI(TAG, "[3.4] Link it together [codec_chip]-->i2s_stream_reader-->i2s_stream_writer-->[codec_chip]");
@@ -153,7 +130,6 @@ void app_main(void)
     audio_pipeline_terminate(pipeline);
 
     audio_pipeline_unregister(pipeline, i2s_stream_reader);
-    // audio_pipeline_unregister(pipeline, filter_upsample_el);
     audio_pipeline_unregister(pipeline, delay);
     audio_pipeline_unregister(pipeline, i2s_stream_writer);
 
@@ -167,6 +143,5 @@ void app_main(void)
     audio_pipeline_deinit(pipeline);
     audio_element_deinit(i2s_stream_reader);
     audio_element_deinit(delay);
-    // audio_element_deinit(filter_upsample_el);
     audio_element_deinit(i2s_stream_writer);
 }
