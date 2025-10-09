@@ -27,14 +27,14 @@ typedef struct myDelay {
     int  at_eof;
 } myDelay_t;
 
-typedef union {
-	short audiosample16;
-    int16_t audiosampleint16; //custom
-	struct audiosample16_bytes{
-		unsigned h	:8;
-		unsigned l	:8;
-	} audiosample16_bytes;
-} audiosample16_t;
+// typedef union {
+// 	short audiosample16;
+//     int16_t audiosampleint16; //custom
+// 	struct audiosample16_bytes{
+// 		unsigned h	:8;
+// 		unsigned l	:8;
+// 	} audiosample16_bytes;
+// } audiosample16_t;
 
 #ifdef DEBUG_MYDELAY_ENC_ISSUE
 static FILE *infile;
@@ -99,7 +99,7 @@ esp_err_t myDelay_set_info(audio_element_handle_t self, int rate, int ch)
 //     return ESP_OK;
 // }
 
-esp_err_t myDelay_set_lfo_handle(audio_element_handle_t self, audio_element_handle_t lfo_handle) {
+esp_err_t myDelay_set_LFO_handle(audio_element_handle_t self, audio_element_handle_t lfo_handle) {
     myDelay_t *myDelay = (myDelay_t *)audio_element_getdata(self);
     if (lfo_handle == NULL) {
         ESP_LOGE(TAG, "lfo_handle is NULL. (line %d)", __LINE__);
@@ -112,6 +112,17 @@ esp_err_t myDelay_set_lfo_handle(audio_element_handle_t self, audio_element_hand
     // }
     myDelay->LFO_handle = lfo_handle;
     ESP_LOGI(TAG, "LFO handle assigned to myDelay.");
+    return ESP_OK;
+}
+
+esp_err_t myDelay_set_feedback(audio_element_handle_t self, float newFeedback) {
+    myDelay_t *myDelay = (myDelay_t *)audio_element_getdata(self);
+    if (newFeedback < 0.0f || newFeedback > 0.95f) {
+        ESP_LOGE(TAG, "Feedback must be between 0.0 and 0.95. (line %d)", __LINE__);
+        return ESP_ERR_INVALID_ARG;
+    }
+    myDelay->feedback = newFeedback;
+    ESP_LOGI(TAG, "Feedback set to %.2f", newFeedback);
     return ESP_OK;
 }
 
@@ -166,22 +177,20 @@ static esp_err_t myDelay_open(audio_element_handle_t self)
     size_t delay_bytes = (size_t)myDelay->memorySize * sizeof(int16_t); //custom: è in byte
     ESP_LOGI(TAG, "myDelay memory size in bytes: %u", (unsigned)delay_bytes);
 
-    // Sostituisci calloc() con heap_caps_calloc() e il flag MALLOC_CAP_SPIRAM
+    // Sostituito calloc() con heap_caps_calloc() e il flag MALLOC_CAP_SPIRAM
     myDelay->delayMemory = (unsigned char *)heap_caps_calloc(1, delay_bytes, MALLOC_CAP_SPIRAM); 
     if (myDelay->delayMemory == NULL) {
         ESP_LOGE(TAG, "calloc FAILED! Could not allocate %u bytes in PSRAM.", delay_bytes);
-        // Pulizia
         audio_free(myDelay->buf); 
         myDelay->buf = NULL;
         return ESP_ERR_NO_MEM;
     }
-    // Azzeramento usando il numero di byte (funziona anche su PSRAM)
     memset(myDelay->delayMemory, 0, delay_bytes);
     // end versione con PSRAM
 
 
 
-    myDelay->feedback = 0.2f; //custom
+    myDelay->feedback = 0.0f; //custom
     myDelay->oldSample = 0.0f; //custom
 
     //end custom
@@ -212,6 +221,7 @@ static esp_err_t myDelay_close(audio_element_handle_t self)
         audio_free(myDelay->delayMemory);
         myDelay->delayMemory = NULL;
     }  
+    myDelay->feedback = 0.0f; //custom
     //end custom
 
 #ifdef MYDELAY_MEMORY_ANALYSIS
@@ -243,16 +253,13 @@ static int myDelay_process(audio_element_handle_t self, char *in_buffer, int in_
         }
         myDelay->byte_num += r_size;
 
-        // unsigned char *pbuf = myDelay->buf;
-        // unsigned char *pDelayMem = myDelay->delayMemory; //custom
-        // unsigned char *pMod = myDelay->modulation.buf; //custom ERROREEEEEEEEEEEEEEEEEEEEE
-
         int16_t *pbuf16 = (int16_t *)myDelay->buf; //custom
         int16_t *pDelayMem16 = (int16_t *)myDelay->delayMemory; //custom
 
-        audiosample16_t audiosample;
-        audiosample16_t modsample;
-        float dt = 0.8f; //custom DA CANCELLARE
+        // DEBUG
+        myDelay->feedback = 0.1f;
+        // end DEBUG
+        float dt = 0.2f; //custom DA CANCELLARE
         float dryWetRatio = 0.5f; // custom dry wet mix -> DA ESPORRE
 
         for(int i=0; i<r_size / 2; i++){ //custom 
@@ -273,21 +280,22 @@ static int myDelay_process(audio_element_handle_t self, char *in_buffer, int in_
             float sampleValue = alpha * (sample_B_float - myDelay->oldSample) + sample_A_float; 
             
             myDelay->oldSample = sampleValue; //custom
-            
+
+            pbuf16[i] = (int16_t)(sampleValue * 32767.0f);
+
+            float delayedSample = inputSample + sampleValue * myDelay->feedback; //custom
+            pDelayMem16[myDelay->writeIndex] = (int16_t)(delayedSample * 32767.0f);
+
+            myDelay->writeIndex = (myDelay->writeIndex + 1) % myDelay->memorySize; //custom
+
+            // dry wet mix
             float outputSample = sampleValue * sqrtf(1 - dryWetRatio) + inputSample * sqrtf(dryWetRatio); //custom
             
             if (outputSample > 1.0f) outputSample = 1.0f; // custom
             else if (outputSample < -1.0f) outputSample = -1.0f; //custom
 
-            audiosample.audiosampleint16 = (int16_t)(outputSample * 32767.0f);
-            pbuf16[i] = audiosample.audiosampleint16;
+            pbuf16[i] = (int16_t)(outputSample * 32767.0f);
 
-            modsample.audiosampleint16 = pDelayMem16[myDelay->writeIndex]; //custom: da togliere
-            float delayedSample = inputSample + sampleValue * myDelay->feedback; //custom
-            pDelayMem16[myDelay->writeIndex] = (int16_t)(delayedSample * 32767.0f);
-            // pDelayMem16[myDelay->writeIndex] = pbuf16[i]; // da cancellare
-
-            myDelay->writeIndex = (myDelay->writeIndex + 1) % myDelay->memorySize; //custom
             // end vers 1
         }
         ret = audio_element_output(self, (char *)myDelay->buf, BUF_SIZE);

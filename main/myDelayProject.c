@@ -74,7 +74,7 @@ void app_main(void)
     // i2s_cfg.chan_cfg.dma_desc_num = 3;
     // i2s_cfg.chan_cfg.dma_frame_num = 312;
     // i2s_cfg.std_cfg.clk_cfg.mclk_multiple = I2S_MCLK_MULTIPLE_384;
-    i2s_cfg.volume = 90; 
+    i2s_cfg.volume = 100; 
     i2s_stream_writer = i2s_stream_init(&i2s_cfg);
     ESP_LOGI(TAG, "W sample rate in i2s_stream_writer:%d", (int) i2s_cfg.std_cfg.clk_cfg.sample_rate_hz);
     ESP_LOGI(TAG, "W data_bit_width in i2s_stream_writer:%d", (int) i2s_cfg.std_cfg.slot_cfg.data_bit_width);
@@ -94,7 +94,7 @@ void app_main(void)
     // i2s_cfg_read.chan_cfg.dma_desc_num = 3;
     // i2s_cfg_read.chan_cfg.dma_frame_num = 312;
     // i2s_cfg_read.std_cfg.clk_cfg.mclk_multiple = I2S_MCLK_MULTIPLE_384;
-    i2s_cfg_read.volume = 90;
+    i2s_cfg_read.volume = 100;
     i2s_stream_reader = i2s_stream_init(&i2s_cfg_read);
     ESP_LOGI(TAG, "R sample rate in i2s_stream_reader:%d", (int) i2s_cfg_read.std_cfg.clk_cfg.sample_rate_hz);
     ESP_LOGI(TAG, "R data_bit_width in i2s_stream_reader:%d", (int) i2s_cfg_read.std_cfg.slot_cfg.data_bit_width);

@@ -184,15 +184,12 @@ esp_err_t LFO_get_next_sample(audio_element_handle_t self, float *outSample)
             sample = sinf(LFO->currentPhase * 2.0f * M_PI);
             break;
         case 1: // Square wave
-            // sample = (sinf(LFO->currentPhase * 2.0f * M_PI) >= 0.0f) ? 1.0f : -1.0f;
             sample = (LFO->currentPhase >= 0.5f) ? 1.0f : -1.0f;
             break;
         case 2: // Triangle wave
-            // sample = (2.0f / M_PI) * asinf(sinf(LFO->currentPhase * 2.0f * M_PI)); 
             sample = 4.0f * fabsf(LFO->currentPhase - 0.5f) - 1.0f; //check
             break;
         case 3: // Sawtooth wave (rising)
-            // sample = (2.0f * (LFO->currentPhase - floorf(LFO->currentPhase + 0.5f))); 
             sample = 2.0f * LFO->currentPhase - 1.0f; //check
             break;
         default:

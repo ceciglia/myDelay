@@ -70,6 +70,17 @@ esp_err_t myDelay_set_info(audio_element_handle_t self, int rate, int ch);
 //  */
 // esp_err_t myDelay_set_LFO_modulation(audio_element_handle_t self, LFO_cfg_t *modCfg); //custom
 
+/**
+ * @brief      Set the feedback amount for the delay effect.
+ *
+ * @param      self         Audio element handle
+ * @param      newFeedback  The new feedback value (0.0 to 0.95)
+ *
+ * @return     
+ *             ESP_OK
+ *             ESP_FAIL
+ */
+esp_err_t myDelay_set_feedback(audio_element_handle_t self, float newFeedback); //custom
 
 /**
  * @brief 	   Assign the LFO handle to the Delay element for modulation.
@@ -79,7 +90,7 @@ esp_err_t myDelay_set_info(audio_element_handle_t self, int rate, int ch);
  *
  * @return 	   ESP_OK or ESP_FAIL
  */
-esp_err_t myDelay_set_lfo_handle(audio_element_handle_t self, audio_element_handle_t lfo_handle);
+esp_err_t myDelay_set_LFO_handle(audio_element_handle_t self, audio_element_handle_t lfo_handle);
 
 /**
  * @brief      Create an Audio Element handle that delay incoming data.
