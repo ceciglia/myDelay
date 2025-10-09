@@ -82,36 +82,27 @@ esp_err_t myDelay_set_info(audio_element_handle_t self, int rate, int ch)
 }
 
 //custom
-
-// esp_err_t myDelay_set_LFO_modulation(audio_element_handle_t self, LFO_cfg_t *modCfg)
-// {
-//     myDelay_t *myDelay = (myDelay_t *)audio_element_getdata(self);
-//     if (modCfg == NULL) {
-//         ESP_LOGE(TAG, "modCfg is NULL. (line %d)", __LINE__);
-//         return ESP_ERR_INVALID_ARG;
-//     }
-//     LFO_t *LFO = (LFO_t *)audio_element_getdata(self);
-//     if (LFO->samplerate != modCfg->samplerate || LFO->channel != modCfg->channel) {
-//         ESP_LOGE(TAG, "LFO sample rate and channel must match modulation config. (line %d)", __LINE__);
-//         return ESP_ERR_INVALID_ARG;
-//     }
-//     myDelay->modulation = LFO;
-//     return ESP_OK;
-// }
-
 esp_err_t myDelay_set_LFO_handle(audio_element_handle_t self, audio_element_handle_t lfo_handle) {
     myDelay_t *myDelay = (myDelay_t *)audio_element_getdata(self);
     if (lfo_handle == NULL) {
         ESP_LOGE(TAG, "lfo_handle is NULL. (line %d)", __LINE__);
         return ESP_ERR_INVALID_ARG;
     }
-    // LFO_t *LFO = (LFO_t *)audio_element_getdata(lfo_handle);
-    // if (LFO == NULL) {
-    //     ESP_LOGE(TAG, "The provided handle is not a valid LFO element. (line %d)", __LINE__);
-    //     return ESP_ERR_INVALID_ARG;
-    // }
+    
     myDelay->LFO_handle = lfo_handle;
     ESP_LOGI(TAG, "LFO handle assigned to myDelay.");
+    
+    LFO_t *LFO = (LFO_t *)audio_element_getdata(lfo_handle);
+    if (LFO == NULL) {
+        ESP_LOGE(TAG, "The provided handle is not a valid LFO element. (line %d)", __LINE__);
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    if (LFO->samplerate != myDelay->samplerate || LFO->channel != myDelay->channel) {
+        LFO_set_info(lfo_handle, myDelay->samplerate, myDelay->channel);
+        ESP_LOGI(TAG, "LFO sample rate and channel adjusted to match myDelay config.");
+    }
+
     return ESP_OK;
 }
 
@@ -257,14 +248,15 @@ static int myDelay_process(audio_element_handle_t self, char *in_buffer, int in_
         int16_t *pDelayMem16 = (int16_t *)myDelay->delayMemory; //custom
 
         // DEBUG
-        myDelay->feedback = 0.1f;
+        myDelay->feedback = 0.0f;
         // end DEBUG
-        float dt = 0.2f; //custom DA CANCELLARE
+        float dt = 0.1f; //custom DA CANCELLARE
         float dryWetRatio = 0.5f; // custom dry wet mix -> DA ESPORRE
 
         for(int i=0; i<r_size / 2; i++){ //custom 
             // vers 1
             float inputSample = (float)pbuf16[i] / 32767.0f; //custom
+            LFO_get_next_sample(myDelay->LFO_handle, &dt); //custom
             float readIndex = (float)myDelay->writeIndex - (dt * (float)myDelay->samplerate) ; //custom
             int integerPart = (int) readIndex; //custom
             float fractionalPart = readIndex - integerPart; //custom

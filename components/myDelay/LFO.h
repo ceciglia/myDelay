@@ -28,6 +28,18 @@ typedef struct LFO_cfg {
     int task_prio;   /*!< Task priority*/
 } LFO_cfg_t;
 
+typedef struct LFO {
+    int  samplerate;
+    int  channel;
+    float frequency; //custom: posso usare i float?
+    int waveform;  //custom
+    float currentPhase; //custom
+    float samplingPeriod; //custom
+    // unsigned char *buf;
+    // int  byte_num;
+    // int  at_eof;
+} LFO_t;
+
 #define LFO_TASK_STACK       (4 * 1024)
 #define LFO_TASK_CORE        (0)
 #define LFO_TASK_PRIO        (5)

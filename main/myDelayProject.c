@@ -6,6 +6,7 @@
 #include "i2s_stream.h"
 #include "board.h"
 #include "myDelay.h"
+#include "LFO.h" //custom
 
 
 static const char *TAG = "MYDELAYPROJECT";
@@ -32,8 +33,6 @@ void app_main(void)
     audio_hal_codec_iface_config(board_handle->audio_hal, AUDIO_HAL_CODEC_MODE_BOTH, &iface);
     audio_hal_ctrl_codec(board_handle->audio_hal, AUDIO_HAL_CODEC_MODE_BOTH, AUDIO_HAL_CTRL_START);
     audio_hal_enable_pa(board_handle->audio_hal, true); 
-
-    
 
     ESP_LOGI(TAG, "[ 2 ] Create audio pipeline for playback");
     audio_pipeline_cfg_t pipeline_cfg = DEFAULT_AUDIO_PIPELINE_CONFIG();
@@ -78,8 +77,12 @@ void app_main(void)
     ESP_LOGI(TAG, "R data_bit_width in i2s_stream_reader:%d", (int) i2s_cfg_read.std_cfg.slot_cfg.data_bit_width);
     ESP_LOGI(TAG, "R slot_mode in i2s_stream_reader:%d", (int) i2s_cfg_read.std_cfg.slot_cfg.slot_mode);
 
+    LFO_cfg_t lfo_cfg = DEFAULT_LFO_CONFIG();
+    audio_element_handle_t lfo_handle = LFO_init(&lfo_cfg);
+
     myDelay_cfg_t myDelay_cfg = DEFAULT_MYDELAY_CONFIG();
     delay = myDelay_init(&myDelay_cfg);
+    myDelay_set_LFO_handle(delay, lfo_handle); // custom: set LFO handle to myDelay
 
     ESP_LOGI(TAG, "[3.3] Register all elements to audio pipeline");
     audio_pipeline_register(pipeline, i2s_stream_reader, "i2s_read");

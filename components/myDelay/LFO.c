@@ -8,21 +8,22 @@
 #include "audio_element.h"
 #include "LFO.h"
 #include "audio_type_def.h"
+
 static const char *TAG = "LFO";
 
 // #define BUF_SIZE (128)
 
-typedef struct LFO {
-    int  samplerate;
-    int  channel;
-    float frequency; //custom: posso usare i float?
-    int waveform;  //custom
-    float currentPhase; //custom
-    float samplingPeriod; //custom
-    // unsigned char *buf;
-    // int  byte_num;
-    // int  at_eof;
-} LFO_t;
+// typedef struct LFO {
+//     int  samplerate;
+//     int  channel;
+//     float frequency; //custom: posso usare i float?
+//     int waveform;  //custom
+//     float currentPhase; //custom
+//     float samplingPeriod; //custom
+//     // unsigned char *buf;
+//     // int  byte_num;
+//     // int  at_eof;
+// } LFO_t;
 
 // typedef union {
 // 	short audiosample16;
@@ -116,7 +117,7 @@ static esp_err_t LFO_open(audio_element_handle_t self)
 
     LFO->currentPhase = 0.0f; 
     LFO->samplingPeriod = 1.0f / (float)LFO->samplerate;
-    LFO->frequency = 220.0f; //custom
+    LFO->frequency = 5.0f; //custom
     LFO->waveform = 2;  //custom: triangle wave
     
 #ifdef DEBUG_LFO_ENC_ISSUE
@@ -159,6 +160,7 @@ esp_err_t LFO_set_waveform(audio_element_handle_t self, int type)
         return ESP_ERR_INVALID_ARG;
     }
     LFO->waveform = type;
+    ESP_LOGI(TAG, "LFO waveform set to type %d", type);
     return ESP_OK;
 }
 
@@ -170,9 +172,9 @@ esp_err_t LFO_set_frequency(audio_element_handle_t self, float newFreq)
         return ESP_ERR_INVALID_ARG;
     }
     LFO->frequency = newFreq;
+    ESP_LOGI(TAG, "LFO frequency set to %.2f Hz", newFreq);
     return ESP_OK;
 }
-//end custom
 
 esp_err_t LFO_get_next_sample(audio_element_handle_t self, float *outSample) 
 {
@@ -202,9 +204,11 @@ esp_err_t LFO_get_next_sample(audio_element_handle_t self, float *outSample)
     if (LFO->currentPhase >= 1.0f) {
         LFO->currentPhase -= 1.0f;
     }
-    *outSample = sample;
+    *outSample = sample + 1.0f * 0.5f; // Normalize to [0, 1] range -> CAMBIAREEEEEEEEEEEEEEE
     return ESP_OK;
 }
+
+//end custom
 
 static int LFO_process(audio_element_handle_t self, char *in_buffer, int in_len)
 {
