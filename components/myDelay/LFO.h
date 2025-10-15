@@ -35,6 +35,7 @@ typedef struct LFO {
     int waveform;  //custom
     float currentPhase; //custom
     float samplingPeriod; //custom
+    float modAmount; //custom
     // unsigned char *buf;
     // int  byte_num;
     // int  at_eof;

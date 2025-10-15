@@ -34,7 +34,6 @@ typedef struct myDelay_cfg {
 
 #define MYDELAY_MAX_DELAY_TIME       (1.5f) //custom
 
-
 #define DEFAULT_MYDELAY_CONFIG() {                \
         .samplerate  = 48000,                      \
         .channel     = 1,                         \

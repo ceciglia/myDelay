@@ -8,6 +8,7 @@
 #include "audio_element.h"
 #include "myDelay.h"
 #include "audio_type_def.h"
+#include "../../../../esp/esp-adf/components/audio_hal/driver/es8388/es8388.h" // DEBUG
 
 static const char *TAG = "MYDELAY";
 
@@ -23,6 +24,10 @@ typedef struct myDelay {
     float oldSample; //custom
     float feedback;   //custom
     audio_element_handle_t LFO_handle; //custom
+    int debug; //custom da cancellare
+    float max; //custom da cancellare
+    float min; //custom da cancellare
+    int once; //custom da cancellare
     int  byte_num;
     int  at_eof;
 } myDelay_t;
@@ -181,9 +186,12 @@ static esp_err_t myDelay_open(audio_element_handle_t self)
 
 
 
-    myDelay->feedback = 0.0f; //custom
+    myDelay->feedback = 0.1f; //custom
     myDelay->oldSample = 0.0f; //custom
-
+    myDelay->debug = 64; //custom da cancellare
+    myDelay->max = 0.0f; //custom da cancellare
+    myDelay->min = 0.0f; //custom da cancellare
+    myDelay->once = 0; //custom da cancellare
     //end custom
 
 #ifdef DEBUG_MYDELAY_ENC_ISSUE
@@ -235,28 +243,46 @@ static int myDelay_process(audio_element_handle_t self, char *in_buffer, int in_
 #ifdef DEBUG_MYDELAY_ENC_ISSUE
         r_size = fread((char *)myDelay->buf, 1, BUF_SIZE, infile);
 #else
-        r_size = audio_element_input(self, (char *)myDelay->buf, BUF_SIZE); //custom
+r_size = audio_element_input(self, (char *)myDelay->buf, BUF_SIZE); //custom
 #endif
+}
+if (r_size > 0) {    
+    if (r_size != BUF_SIZE) { 
+        myDelay->at_eof = 1;
     }
-    if (r_size > 0) {    
-        if (r_size != BUF_SIZE) { 
-            myDelay->at_eof = 1;
-        }
-        myDelay->byte_num += r_size;
-
-        int16_t *pbuf16 = (int16_t *)myDelay->buf; //custom
-        int16_t *pDelayMem16 = (int16_t *)myDelay->delayMemory; //custom
-
+    myDelay->byte_num += r_size;
+    
+    int16_t *pbuf16 = (int16_t *)myDelay->buf; //custom
+    int16_t *pDelayMem16 = (int16_t *)myDelay->delayMemory; //custom
+    
         // DEBUG
+        float gainFactor = 10.0f; //custom da cancellare
         myDelay->feedback = 0.0f;
         // end DEBUG
-        float dt = 0.1f; //custom DA CANCELLARE
+        float dt = 0.5f; //custom DA CANCELLARE
         float dryWetRatio = 0.5f; // custom dry wet mix -> DA ESPORRE
-
+        
         for(int i=0; i<r_size / 2; i++){ //custom 
             // vers 1
-            float inputSample = (float)pbuf16[i] / 32767.0f; //custom
-            LFO_get_next_sample(myDelay->LFO_handle, &dt); //custom
+            float inputSample = (float)pbuf16[i] / 32768.0f; //custom
+            // if (inputSample > 1.0f) inputSample = 1.0f; // custom
+            // else if (inputSample < -1.0f) inputSample = -1.0f; //custom
+            // DEBUG
+            // if (inputSample > myDelay->max) {
+            //     myDelay->max = inputSample; 
+            // }
+            // if (inputSample < myDelay->min) {
+            //     myDelay->min = inputSample; 
+            // }
+            // if (myDelay->debug%100000==0) {
+            //     ESP_LOGI(TAG, "myDelay MAX inputSample: %.3f", myDelay->max); 
+            //     ESP_LOGI(TAG, "myDelay MIN inputSample: %.3f", myDelay->min); 
+            //     ESP_LOGI(TAG, "pbuf16[%d]: %d", i, pbuf16[i]);
+            // }
+            // end DEBUG
+            
+            // LFO_get_next_sample(myDelay->LFO_handle, &dt); //custom
+            // dt = fminf(dt, MYDELAY_MAX_DELAY_TIME); //custom: clamp to max delay time
             float readIndex = (float)myDelay->writeIndex - (dt * (float)myDelay->samplerate) ; //custom
             int integerPart = (int) readIndex; //custom
             float fractionalPart = readIndex - integerPart; //custom
@@ -267,27 +293,42 @@ static int myDelay_process(audio_element_handle_t self, char *in_buffer, int in_
 
             pDelayMem16[myDelay->writeIndex] = pbuf16[i]; //custom
 
-            float sample_A_float = (float)pDelayMem16[A] / 32767.0f;
-            float sample_B_float = (float)pDelayMem16[B] / 32767.0f;
+            float sample_A_float = (float)pDelayMem16[A] / 32768.0f;
+            float sample_B_float = (float)pDelayMem16[B] / 32768.0f;
             float sampleValue = alpha * (sample_B_float - myDelay->oldSample) + sample_A_float; 
             
             myDelay->oldSample = sampleValue; //custom
-
-            pbuf16[i] = (int16_t)(sampleValue * 32767.0f);
+            
+            pbuf16[i] = (int16_t)(sampleValue * 32768.0f);
 
             float delayedSample = inputSample + sampleValue * myDelay->feedback; //custom
-            pDelayMem16[myDelay->writeIndex] = (int16_t)(delayedSample * 32767.0f);
+            pDelayMem16[myDelay->writeIndex] = (int16_t)(delayedSample * 32768.0f);
 
             myDelay->writeIndex = (myDelay->writeIndex + 1) % myDelay->memorySize; //custom
 
             // dry wet mix
             float outputSample = sampleValue * sqrtf(1 - dryWetRatio) + inputSample * sqrtf(dryWetRatio); //custom
             
-            if (outputSample > 1.0f) outputSample = 1.0f; // custom
-            else if (outputSample < -1.0f) outputSample = -1.0f; //custom
+            // if (outputSample > 1.0f) outputSample = 1.0f; // custom
+            // else if (outputSample < -1.0f) outputSample = -1.0f; //custom
 
-            pbuf16[i] = (int16_t)(outputSample * 32767.0f);
-
+            // DEBUG
+            if (outputSample > myDelay->max) {
+                myDelay->max = outputSample; 
+            }
+            if (outputSample < myDelay->min) {
+                myDelay->min = outputSample; 
+            }
+            // if (myDelay->debug%100000==0) {
+            //     ESP_LOGI(TAG, "myDelay MAX outputSample: %.3f", myDelay->max); 
+            //     ESP_LOGI(TAG, "myDelay MIN outputSample: %.3f", myDelay->min); 
+            //     ESP_LOGI(TAG, "pbuf16[%d]: %d", i, pbuf16[i]);
+            // }
+            myDelay->debug = myDelay->debug + 1; //custom da cancellare 
+            // end DEBUG
+            
+            pbuf16[i] = (int16_t)(outputSample * 32768.0f);
+            
             // end vers 1
         }
         ret = audio_element_output(self, (char *)myDelay->buf, BUF_SIZE);

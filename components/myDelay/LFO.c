@@ -119,6 +119,7 @@ static esp_err_t LFO_open(audio_element_handle_t self)
     LFO->samplingPeriod = 1.0f / (float)LFO->samplerate;
     LFO->frequency = 5.0f; //custom
     LFO->waveform = 2;  //custom: triangle wave
+    LFO->modAmount = 1.0f; //custom: modulation amount
     
 #ifdef DEBUG_LFO_ENC_ISSUE
     char fileName[100] = {'//', 's', 'd', 'c', 'a', 'r', 'd', '//', 't', 'e', 's', 't', '.', 'p', 'c', 'm', '\0'};
@@ -204,7 +205,7 @@ esp_err_t LFO_get_next_sample(audio_element_handle_t self, float *outSample)
     if (LFO->currentPhase >= 1.0f) {
         LFO->currentPhase -= 1.0f;
     }
-    *outSample = sample + 1.0f * 0.5f; // Normalize to [0, 1] range -> CAMBIAREEEEEEEEEEEEEEE
+    *outSample = sample + 1.0f * 0.5f; // Scale to [0, 2] range and offset to [0, 1] range
     return ESP_OK;
 }
 
