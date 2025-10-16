@@ -27,12 +27,14 @@ typedef struct myDelay_cfg {
     int task_prio;   /*!< Task priority*/
 } myDelay_cfg_t;
 
-#define MYDELAY_TASK_STACK       (4 * 1024)
+// #define MYDELAY_TASK_STACK       (4 * 1024)
+#define MYDELAY_TASK_STACK       (6 * 1024) //custom
 #define MYDELAY_TASK_CORE        (0)
-#define MYDELAY_TASK_PRIO        (5)
+// #define MYDELAY_TASK_PRIO        (5)
+#define MYDELAY_TASK_PRIO        (19) //custom
 #define MYDELAY_RINGBUFFER_SIZE  (8 * 1024)
 
-#define MYDELAY_MAX_DELAY_TIME       (1.5f) //custom
+#define MYDELAY_MAX_DELAY_TIME       (2.0f) //custom
 
 #define DEFAULT_MYDELAY_CONFIG() {                \
         .samplerate  = 48000,                      \

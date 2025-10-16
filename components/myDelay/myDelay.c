@@ -258,16 +258,16 @@ if (r_size > 0) {
     int16_t *pDelayMem16 = (int16_t *)myDelay->delayMemory; //custom
     
         // DEBUG
-        myDelay->feedback = 0.1f;
+        myDelay->feedback = 0.3f;
         // end DEBUG
-        float dt = 0.5f; //custom DA CANCELLARE
+        float dt = 0.3f; //custom DA CANCELLARE
         float dryWetRatio = 0.5f; // custom dry wet mix -> DA ESPORRE
         
         for(int i=0; i<r_size / 2; i++){ //custom 
             // vers 1
-            // float inputSample = (float)pbuf16[i] / 32768.0f; //custom
-            // // if (inputSample > 1.0f) inputSample = 1.0f; // custom
-            // // else if (inputSample < -1.0f) inputSample = -1.0f; //custom
+            float inputSample = (float)pbuf16[i] / 32768.0f; //custom
+            // if (inputSample > 1.0f) inputSample = 1.0f; // custom
+            // else if (inputSample < -1.0f) inputSample = -1.0f; //custom
             // DEBUG
             // if (inputSample > myDelay->max) {
             //     myDelay->max = inputSample; 
@@ -284,34 +284,34 @@ if (r_size > 0) {
             
             // LFO_get_next_sample(myDelay->LFO_handle, &dt); //custom
             // dt = fminf(dt, MYDELAY_MAX_DELAY_TIME); //custom: clamp to max delay time
-            // float readIndex = (float)myDelay->writeIndex - (dt * (float)myDelay->samplerate) ; //custom
-            // int integerPart = (int) readIndex; //custom
-            // float fractionalPart = readIndex - integerPart; //custom
-            // float alpha = fractionalPart / (2.0f - fractionalPart); //custom
+            float readIndex = (float)myDelay->writeIndex - (dt * (float)myDelay->samplerate) ; //custom
+            int integerPart = (int) readIndex; //custom
+            float fractionalPart = readIndex - integerPart; //custom
+            float alpha = fractionalPart / (2.0f - fractionalPart); //custom
             
-            // int A = (integerPart + myDelay->memorySize) % myDelay->memorySize; //custom
-            // int B = (A + 1) % myDelay->memorySize; //custom
+            int A = (integerPart + myDelay->memorySize) % myDelay->memorySize; //custom
+            int B = (A + 1) % myDelay->memorySize; //custom
 
-            // pDelayMem16[myDelay->writeIndex] = pbuf16[i]; //custom
+            pDelayMem16[myDelay->writeIndex] = pbuf16[i]; //custom
 
-            // float sample_A_float = (float)pDelayMem16[A] / 32768.0f;
-            // float sample_B_float = (float)pDelayMem16[B] / 32768.0f;
-            // float sampleValue = alpha * (sample_B_float - myDelay->oldSample) + sample_A_float; 
+            float sample_A_float = (float)pDelayMem16[A] / 32768.0f;
+            float sample_B_float = (float)pDelayMem16[B] / 32768.0f;
+            float sampleValue = alpha * (sample_B_float - myDelay->oldSample) + sample_A_float; 
             
-            // myDelay->oldSample = sampleValue; //custom
+            myDelay->oldSample = sampleValue; //custom
             
-            // pbuf16[i] = (int16_t)(sampleValue * 32768.0f);
+            pbuf16[i] = (int16_t)(sampleValue * 32768.0f);
 
-            // float delayedSample = inputSample + sampleValue * myDelay->feedback; //custom
-            // pDelayMem16[myDelay->writeIndex] = (int16_t)(delayedSample * 32768.0f);
+            float delayedSample = inputSample + sampleValue * myDelay->feedback; //custom
+            pDelayMem16[myDelay->writeIndex] = (int16_t)(delayedSample * 32768.0f);
 
-            // myDelay->writeIndex = (myDelay->writeIndex + 1) % myDelay->memorySize; //custom
+            myDelay->writeIndex = (myDelay->writeIndex + 1) % myDelay->memorySize; //custom
 
             // dry wet mix
-            // float outputSample = sampleValue * sqrtf(1 - dryWetRatio) + inputSample * sqrtf(dryWetRatio); //custom
+            float outputSample = sampleValue * sqrtf(1 - dryWetRatio) + inputSample * sqrtf(dryWetRatio); //custom
             
-            // // if (outputSample > 1.0f) outputSample = 1.0f; // custom
-            // // else if (outputSample < -1.0f) outputSample = -1.0f; //custom
+            // if (outputSample > 1.0f) outputSample = 1.0f; // custom
+            // else if (outputSample < -1.0f) outputSample = -1.0f; //custom
 
             // DEBUG
             // if (outputSample > myDelay->max) {
@@ -328,7 +328,7 @@ if (r_size > 0) {
             // myDelay->debug = myDelay->debug + 1; //custom da cancellare 
             // end DEBUG
             
-            // pbuf16[i] = (int16_t)(outputSample * 32768.0f);
+            pbuf16[i] = (int16_t)(outputSample * 32768.0f);
             
             // end vers 1
         }
