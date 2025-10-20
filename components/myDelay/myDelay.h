@@ -31,14 +31,14 @@ typedef struct myDelay_cfg {
 #define MYDELAY_TASK_STACK       (6 * 1024) //custom
 #define MYDELAY_TASK_CORE        (0)
 // #define MYDELAY_TASK_PRIO        (5)
-#define MYDELAY_TASK_PRIO        (19) //custom
+#define MYDELAY_TASK_PRIO        (20) //custom
 #define MYDELAY_RINGBUFFER_SIZE  (8 * 1024)
 
 #define MYDELAY_MAX_DELAY_TIME       (2.0f) //custom
 
 #define DEFAULT_MYDELAY_CONFIG() {                \
         .samplerate  = 48000,                      \
-        .channel     = 1,                         \
+        .channel     = 2,                         \
         .out_rb_size = MYDELAY_RINGBUFFER_SIZE,   \
         .task_stack  = MYDELAY_TASK_STACK,        \
         .task_core   = MYDELAY_TASK_CORE,         \

@@ -44,8 +44,8 @@ void app_main(void)
     i2s_cfg.std_cfg.clk_cfg.sample_rate_hz = 48000;
     // i2s_cfg.std_cfg.slot_cfg.data_bit_width = I2S_DATA_BIT_WIDTH_24BIT;
     // i2s_cfg.std_cfg.slot_cfg.slot_bit_width = I2S_SLOT_BIT_WIDTH_32BIT;
-    i2s_cfg.std_cfg.slot_cfg.slot_mode = I2S_SLOT_MODE_MONO;
-    i2s_cfg.std_cfg.slot_cfg.slot_mask = I2S_STD_SLOT_RIGHT;
+    // i2s_cfg.std_cfg.slot_cfg.slot_mode = I2S_SLOT_MODE_MONO;
+    // i2s_cfg.std_cfg.slot_cfg.slot_mask = I2S_STD_SLOT_RIGHT;
     i2s_cfg.chan_cfg.role = I2S_ROLE_MASTER; 
     // i2s_cfg.std_cfg.slot_cfg.ws_pol = false;
     // i2s_cfg.chan_cfg.dma_desc_num = 3;
@@ -64,8 +64,8 @@ void app_main(void)
     i2s_cfg_read.std_cfg.clk_cfg.sample_rate_hz = 48000;
     // i2s_cfg_read.std_cfg.slot_cfg.data_bit_width = I2S_DATA_BIT_WIDTH_24BIT;
     // i2s_cfg_read.std_cfg.slot_cfg.slot_bit_width = I2S_SLOT_BIT_WIDTH_32BIT;
-    i2s_cfg_read.std_cfg.slot_cfg.slot_mode = I2S_SLOT_MODE_MONO;
-    i2s_cfg_read.std_cfg.slot_cfg.slot_mask = I2S_STD_SLOT_RIGHT;
+    // i2s_cfg_read.std_cfg.slot_cfg.slot_mode = I2S_SLOT_MODE_MONO;
+    // i2s_cfg_read.std_cfg.slot_cfg.slot_mask = I2S_STD_SLOT_RIGHT;
     i2s_cfg_read.chan_cfg.role = I2S_ROLE_MASTER; 
     // i2s_cfg_read.std_cfg.slot_cfg.ws_pol = false;
     // i2s_cfg_read.chan_cfg.dma_desc_num = 3;
@@ -100,8 +100,8 @@ void app_main(void)
     ESP_LOGI(TAG, "[4.1] Listening event from all elements of pipeline");
     audio_pipeline_set_listener(pipeline, evt);
 
-    i2s_stream_set_clk(i2s_stream_reader, 48000, 16, 1); // CHECKK THIS 
-    i2s_stream_set_clk(i2s_stream_writer, 48000, 16, 1); /// CHECKK THIS
+    i2s_stream_set_clk(i2s_stream_reader, 48000, 16, 2); // CHECKK THIS 
+    i2s_stream_set_clk(i2s_stream_writer, 48000, 16, 2); /// CHECKK THIS
     // ESP_LOGI(TAG, "AFTEREXE sample rate in i2s_stream_writer:%d", (int) i2s_cfg.std_cfg.clk_cfg.sample_rate_hz);
     // ESP_LOGI(TAG, "AFTEREXE data_bit_width in i2s_stream_writer:%d", (int) i2s_cfg.std_cfg.slot_cfg.data_bit_width);
     // ESP_LOGI(TAG, "AFTEREXE slot_mode in i2s_stream_writer:%d", (int) i2s_cfg.std_cfg.slot_cfg.slot_mode);
