@@ -6,7 +6,6 @@
 #include "i2s_stream.h"
 #include "board.h"
 #include "myDelay.h"
-#include "LFO.h" //custom
 
 
 static const char *TAG = "MYDELAYPROJECT";
@@ -53,9 +52,9 @@ void app_main(void)
     // i2s_cfg.std_cfg.clk_cfg.mclk_multiple = I2S_MCLK_MULTIPLE_384;
     // i2s_cfg.volume = 100; 
     i2s_stream_writer = i2s_stream_init(&i2s_cfg);
-    ESP_LOGI(TAG, "W sample rate in i2s_stream_writer:%d", (int) i2s_cfg.std_cfg.clk_cfg.sample_rate_hz);
-    ESP_LOGI(TAG, "W data_bit_width in i2s_stream_writer:%d", (int) i2s_cfg.std_cfg.slot_cfg.data_bit_width);
-    ESP_LOGI(TAG, "W slot_mode in i2s_stream_writer:%d", (int) i2s_cfg.std_cfg.slot_cfg.slot_mode);
+    // ESP_LOGI(TAG, "W sample rate in i2s_stream_writer:%d", (int) i2s_cfg.std_cfg.clk_cfg.sample_rate_hz);
+    // ESP_LOGI(TAG, "W data_bit_width in i2s_stream_writer:%d", (int) i2s_cfg.std_cfg.slot_cfg.data_bit_width);
+    // ESP_LOGI(TAG, "W slot_mode in i2s_stream_writer:%d", (int) i2s_cfg.std_cfg.slot_cfg.slot_mode);
         
 
     ESP_LOGI(TAG, "[3.2] Create i2s stream to read data from codec chip");
@@ -73,9 +72,9 @@ void app_main(void)
     // i2s_cfg_read.std_cfg.clk_cfg.mclk_multiple = I2S_MCLK_MULTIPLE_384;
     // i2s_cfg_read.volume = 100;
     i2s_stream_reader = i2s_stream_init(&i2s_cfg_read);
-    ESP_LOGI(TAG, "R sample rate in i2s_stream_reader:%d", (int) i2s_cfg_read.std_cfg.clk_cfg.sample_rate_hz);
-    ESP_LOGI(TAG, "R data_bit_width in i2s_stream_reader:%d", (int) i2s_cfg_read.std_cfg.slot_cfg.data_bit_width);
-    ESP_LOGI(TAG, "R slot_mode in i2s_stream_reader:%d", (int) i2s_cfg_read.std_cfg.slot_cfg.slot_mode);
+    // ESP_LOGI(TAG, "R sample rate in i2s_stream_reader:%d", (int) i2s_cfg_read.std_cfg.clk_cfg.sample_rate_hz);
+    // ESP_LOGI(TAG, "R data_bit_width in i2s_stream_reader:%d", (int) i2s_cfg_read.std_cfg.slot_cfg.data_bit_width);
+    // ESP_LOGI(TAG, "R slot_mode in i2s_stream_reader:%d", (int) i2s_cfg_read.std_cfg.slot_cfg.slot_mode);
 
     LFO_cfg_t lfo_cfg = DEFAULT_LFO_CONFIG();
     audio_element_handle_t lfo_handle = LFO_init(&lfo_cfg);
@@ -89,7 +88,7 @@ void app_main(void)
     audio_pipeline_register(pipeline, delay, "delay");
     audio_pipeline_register(pipeline, i2s_stream_writer, "i2s_write");
 
-    ESP_LOGI(TAG, "[3.4] Link it together [codec_chip]-->i2s_stream_reader-->i2s_stream_writer-->[codec_chip]");
+    ESP_LOGI(TAG, "[3.4] Link it together [codec_chip]-->i2s_stream_reader-->delay-->i2s_stream_writer-->[codec_chip]");
     const char *link_tag[3] = {"i2s_read", "delay", "i2s_write"};
     audio_pipeline_link(pipeline, &link_tag[0], 3);
 
@@ -107,6 +106,7 @@ void app_main(void)
     // ESP_LOGI(TAG, "AFTEREXE slot_mode in i2s_stream_writer:%d", (int) i2s_cfg.std_cfg.slot_cfg.slot_mode);
 
     ESP_LOGI(TAG, "[ 5 ] Start audio_pipeline");
+    audio_element_run(lfo_handle);   // custom: run LFO element
     audio_pipeline_run(pipeline);
 
     ESP_LOGI(TAG, "[ 6 ] Listen for all pipeline events");
@@ -132,6 +132,11 @@ void app_main(void)
     audio_pipeline_wait_for_stop(pipeline);
     audio_pipeline_terminate(pipeline);
 
+    //custom lfo
+    audio_element_stop(lfo_handle);
+    audio_element_wait_for_stop(lfo_handle);
+    // end custom lfo
+
     audio_pipeline_unregister(pipeline, i2s_stream_reader);
     audio_pipeline_unregister(pipeline, delay);
     audio_pipeline_unregister(pipeline, i2s_stream_writer);
@@ -146,5 +151,6 @@ void app_main(void)
     audio_pipeline_deinit(pipeline);
     audio_element_deinit(i2s_stream_reader);
     audio_element_deinit(delay);
+    audio_element_deinit(lfo_handle); // custom: deinit LFO element
     audio_element_deinit(i2s_stream_writer);
 }

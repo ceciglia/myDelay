@@ -36,20 +36,23 @@ typedef struct LFO {
     float currentPhase; //custom
     float samplingPeriod; //custom
     float modAmount; //custom
-    // unsigned char *buf;
-    // int  byte_num;
-    // int  at_eof;
+    int debugCount; //DEBUG DA CANCELLARE
+    unsigned char *buf;
+    float currentValue; //custom
+    int ciao;
+    int  byte_num;
+    int  at_eof;
 } LFO_t;
 
 #define LFO_TASK_STACK       (4 * 1024)
 #define LFO_TASK_CORE        (0)
 #define LFO_TASK_PRIO        (5)
-#define LFO_RINGBUFFER_SIZE  (8 * 1024)
-
+// #define LFO_RINGBUFFER_SIZE  (8 * 1024)
+#define LFO_RINGBUFFER_SIZE  (0) //custom
 
 #define DEFAULT_LFO_CONFIG() {                \
         .samplerate  = 48000,                 \
-        .channel     = 1,                     \
+        .channel     = 2,                     \
         .out_rb_size = LFO_RINGBUFFER_SIZE,   \
         .task_stack  = LFO_TASK_STACK,        \
         .task_core   = LFO_TASK_CORE,         \
@@ -68,6 +71,8 @@ typedef struct LFO {
  *             ESP_FAIL
  */
 esp_err_t LFO_set_info(audio_element_handle_t self, int rate, int ch);
+
+// esp_err_t LFO_create(LFO_t *LFO, int samplerate, int channel);
 
 /**
  * @brief      Set the audio waveform.
@@ -102,7 +107,20 @@ esp_err_t LFO_set_frequency(audio_element_handle_t self, float freq);
  *            ESP_OK
  *           ESP_FAIL
  */
-esp_err_t LFO_get_next_sample(audio_element_handle_t self, float *outSample); 
+// esp_err_t LFO_get_next_sample(LFO_t *LFO, float *outSample); 
+
+float LFO_get_next_sample(audio_element_handle_t self); 
+
+/**
+ * @brief      Convert LFO sample to unipolar [0, 1] range.
+ *
+ * @param      outSample  Pointer to the output sample
+ *
+ * @return     
+ *             ESP_OK
+ *             ESP_FAIL
+ */
+esp_err_t get_unipolar_LFO(float *outSample);
 
 /**
  * @brief      Create an Audio Element handle that LFO incoming data.

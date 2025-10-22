@@ -5,6 +5,7 @@
 #define _MYDELAY_H_
 
 #include "esp_err.h"
+#include <math.h>
 #include "audio_element.h"
 #include "audio_common.h"
 #include "LFO.h" //custom

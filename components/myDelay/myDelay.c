@@ -8,12 +8,11 @@
 #include "audio_element.h"
 #include "myDelay.h"
 #include "audio_type_def.h"
-#include "../../../../esp/esp-adf/components/audio_hal/driver/es8388/es8388.h" // DEBUG
 
 static const char *TAG = "MYDELAY";
 
 // #define BUF_SIZE (128)
-#define BUF_SIZE (2048) // custom value
+#define BUF_SIZE (512) // custom value
 
 typedef struct myDelay {
     int  samplerate;
@@ -28,10 +27,11 @@ typedef struct myDelay {
     int debug; //custom da cancellare
     float max; //custom da cancellare
     float min; //custom da cancellare
-    int once; //custom da cancellare
     int  byte_num;
     int  at_eof;
 } myDelay_t;
+
+
 
 // typedef union {
 // 	short audiosample16;
@@ -88,6 +88,7 @@ esp_err_t myDelay_set_info(audio_element_handle_t self, int rate, int ch)
 }
 
 //custom
+
 esp_err_t myDelay_set_LFO_handle(audio_element_handle_t self, audio_element_handle_t lfo_handle) {
     myDelay_t *myDelay = (myDelay_t *)audio_element_getdata(self);
     if (lfo_handle == NULL) {
@@ -95,17 +96,18 @@ esp_err_t myDelay_set_LFO_handle(audio_element_handle_t self, audio_element_hand
         return ESP_ERR_INVALID_ARG;
     }
     
-    myDelay->LFO_handle = lfo_handle;
-    ESP_LOGI(TAG, "LFO handle assigned to myDelay.");
-    
     LFO_t *LFO = (LFO_t *)audio_element_getdata(lfo_handle);
     if (LFO == NULL) {
         ESP_LOGE(TAG, "The provided handle is not a valid LFO element. (line %d)", __LINE__);
         return ESP_ERR_INVALID_ARG;
     }
-
+    
+    myDelay->LFO_handle = lfo_handle;
+    ESP_LOGI(TAG, "LFO handle assigned to myDelay.");
+    
     if (LFO->samplerate != myDelay->samplerate || LFO->channel != myDelay->channel) {
-        LFO_set_info(lfo_handle, myDelay->samplerate, myDelay->channel);
+        LFO->samplerate = myDelay->samplerate; 
+        LFO->channel = myDelay->channel;
         ESP_LOGI(TAG, "LFO sample rate and channel adjusted to match myDelay config.");
     }
 
@@ -159,7 +161,8 @@ static esp_err_t myDelay_open(audio_element_handle_t self)
     memset(myDelay->buf, 0, BUF_SIZE); 
 
     myDelay->memorySize = (int)(MYDELAY_MAX_DELAY_TIME * myDelay->samplerate)  + BUF_SIZE / sizeof(int16_t) ; //custom: è in campioni
-    
+    myDelay->memorySize = myDelay->memorySize * myDelay->channel; //custom!!! la raddoppio se sono in stereo perché ho i canali interleaved
+
     // size_t delayBufferSize = myDelay->memorySize * sizeof(int16_t); //custom
     // ESP_LOGI(TAG, "myDelay memory size in samples: %d", delayBufferSize);
     // //custom
@@ -188,10 +191,9 @@ static esp_err_t myDelay_open(audio_element_handle_t self)
     myDelay->feedback = 0.1f; //custom
     myDelay->oldSample[0] = 0.0f; //custom
     myDelay->oldSample[1] = 0.0f; //custom
-    myDelay->debug = 64; //custom da cancellare
+    myDelay->debug = 0; //custom da cancellare
     myDelay->max = 0.0f; //custom da cancellare
     myDelay->min = 0.0f; //custom da cancellare
-    myDelay->once = 0; //custom da cancellare
     //end custom
 
 #ifdef DEBUG_MYDELAY_ENC_ISSUE
@@ -254,88 +256,25 @@ if (r_size > 0) {
     
     int16_t *pbuf16 = (int16_t *)myDelay->buf; //custom
     int16_t *pDelayMem16 = (int16_t *)myDelay->delayMemory; //custom
-    
-        // DEBUG
-        myDelay->feedback = 0.3f;
-        // end DEBUG
-        float dt = 0.05f; //custom DA CANCELLARE
-        float dryWetRatio = 0.5f; // custom dry wet mix -> DA ESPORRE
         
-        // stereo version
-        for(int i=0; i<r_size / 2; i+=2) { //custom
-            for (int j=0; j<myDelay->channel; j++) { //custom
-                float inputSample = (float)pbuf16[i+j] / 32767.0f; //custom
-                
-                // DEBUG
-                // if (inputSample > myDelay->max) {
-                //     myDelay->max = inputSample; 
-                // }
-                // if (inputSample < myDelay->min) {
-                //     myDelay->min = inputSample; 
-                // }
-                // if (myDelay->debug%100000==0) {
-                //     ESP_LOGI(TAG, "myDelay MAX inputSample: %.3f", myDelay->max); 
-                //     ESP_LOGI(TAG, "myDelay MIN inputSample: %.3f", myDelay->min); 
-                //     ESP_LOGI(TAG, "pbuf16[%d]: %d", i, pbuf16[i]);
-                // }
-                // end DEBUG
-                
-                // LFO_get_next_sample(myDelay->LFO_handle, &dt); //custom
-                // dt = fminf(dt, MYDELAY_MAX_DELAY_TIME); //custom: clamp to max delay time
-                float readIndex = (float)myDelay->writeIndex - (dt * (float)myDelay->samplerate) ; //custom
-                int integerPart = (int) readIndex; //custom
-                float fractionalPart = readIndex - integerPart; //custom
-                float alpha = fractionalPart / (2.0f - fractionalPart); //custom
-                
-                int A = (integerPart + myDelay->memorySize) % myDelay->memorySize; //custom
-                int B = (A + 1) % myDelay->memorySize; //custom
+    // DEBUG
+    myDelay->feedback = 0.2f;
+    // end DEBUG
+    float dt = 0.5f; //custom DA CANCELLARE
+    // float mod = 0.0f; //custom 
+    float dryWetRatio = 0.5f; // custom dry wet mix -> DA ESPORRE
 
-                pDelayMem16[myDelay->writeIndex + j] = pbuf16[i+j]; //custom
+    LFO_t *LFO = (LFO_t *)audio_element_getdata(myDelay->LFO_handle); //custom
 
-                float sample_A_float = (float)pDelayMem16[A+j] / 32767.0f;
-                float sample_B_float = (float)pDelayMem16[B+j] / 32767.0f;
-                float sampleValue = alpha * (sample_B_float - myDelay->oldSample[j]) + sample_A_float; 
-                
-                myDelay->oldSample[j] = sampleValue; //custom
-                
-                pbuf16[i+j] = (int16_t)(sampleValue * 32767.0f);
-
-                float delayedSample = inputSample + sampleValue * myDelay->feedback; //custom
-                pDelayMem16[myDelay->writeIndex + j] = (int16_t)(delayedSample * 32767.0f);
-
-                
-                // dry wet mix
-                float outputSample = sampleValue * sqrtf(1 - dryWetRatio) + inputSample * sqrtf(dryWetRatio); //custom
-                
-                // DEBUG
-                // if (outputSample > myDelay->max) {
-                //     myDelay->max = outputSample; 
-                // }
-                // if (outputSample < myDelay->min) {
-                //     myDelay->min = outputSample; 
-                // }
-                // if (myDelay->debug%100000==0) {
-                //     ESP_LOGI(TAG, "myDelay MAX outputSample: %.3f", myDelay->max); 
-                //     ESP_LOGI(TAG, "myDelay MIN outputSample: %.3f", myDelay->min); 
-                //     ESP_LOGI(TAG, "pbuf16[%d]: %d", i, pbuf16[i]);
-                // }
-                // myDelay->debug = myDelay->debug + 1; //custom da cancellare 
-                // end DEBUG
-                
-                pbuf16[i+j] = (int16_t)(outputSample * 32767.0f);
-                
-            }
-            myDelay->writeIndex = (myDelay->writeIndex + 1) % myDelay->memorySize; //custom
-        }
-        // end stereo version
-
-        // for(int i=0; i<r_size / 2; i++){ //custom 
-            // vers 1
-
-            // float inputSample = (float)pbuf16[i] / 32768.0f; //custom
-            // if (inputSample > 1.0f) inputSample = 1.0f; // custom
-            // else if (inputSample < -1.0f) inputSample = -1.0f; //custom
-            
+    // stereo version
+    for(int i=0; i<r_size / 2; i+=2) { //custom
+        // LFO_get_next_sample(&myDelay->LFO_handle, &mod); //custom
+        // float mod = LFO_get_next_sample(myDelay->LFO_handle); //custom
+        // float mod = LFO->currentValue; //custom
+        // mod = fminf(mod, MYDELAY_MAX_DELAY_TIME); //custom: clamp to max delay time
+        // dt += mod; //custom 
+        for (int ch=0; ch<myDelay->channel; ch++) { //custom
+            float inputSample = (float)pbuf16[i+ch] / 32767.0f; //custom
             // DEBUG
             // if (inputSample > myDelay->max) {
             //     myDelay->max = inputSample; 
@@ -344,43 +283,43 @@ if (r_size > 0) {
             //     myDelay->min = inputSample; 
             // }
             // if (myDelay->debug%100000==0) {
+            //     ESP_LOGI(TAG, "myDelay inputSample[%d][%d]: %.3f", i, ch, inputSample);
+                // ESP_LOGI(TAG, "channel and myDelay->channel: %d %d", ch, myDelay->channel);
+            //     ESP_LOGI(TAG, "myDelay dt: %.3f", dt);
+            //     ESP_LOGI(TAG, "myDelay mod: %.3f", mod);
+            //     ESP_LOGI(TAG, "LFO currentValue: %.3f", LFO->currentValue);
             //     ESP_LOGI(TAG, "myDelay MAX inputSample: %.3f", myDelay->max); 
             //     ESP_LOGI(TAG, "myDelay MIN inputSample: %.3f", myDelay->min); 
             //     ESP_LOGI(TAG, "pbuf16[%d]: %d", i, pbuf16[i]);
             // }
             // end DEBUG
+            float readIndex = (float)myDelay->writeIndex - (dt * (float)myDelay->samplerate) ; //custom
+            int integerPart = (int) readIndex; //custom
+            float fractionalPart = readIndex - integerPart; //custom
+            float alpha = fractionalPart / (2.0f - fractionalPart); //custom
             
-            // LFO_get_next_sample(myDelay->LFO_handle, &dt); //custom
-            // dt = fminf(dt, MYDELAY_MAX_DELAY_TIME); //custom: clamp to max delay time
-            // float readIndex = (float)myDelay->writeIndex - (dt * (float)myDelay->samplerate) ; //custom
-            // int integerPart = (int) readIndex; //custom
-            // float fractionalPart = readIndex - integerPart; //custom
-            // float alpha = fractionalPart / (2.0f - fractionalPart); //custom
-            
-            // int A = (integerPart + myDelay->memorySize) % myDelay->memorySize; //custom
+            int A = (integerPart + myDelay->memorySize) % myDelay->memorySize; //custom
             // int B = (A + 1) % myDelay->memorySize; //custom
+            int B = (A + myDelay->channel) % myDelay->memorySize; //custom
 
-            // pDelayMem16[myDelay->writeIndex] = pbuf16[i]; //custom
+            pDelayMem16[myDelay->writeIndex + ch] = pbuf16[i+ch]; //custom
 
-            // float sample_A_float = (float)pDelayMem16[A] / 32768.0f;
-            // float sample_B_float = (float)pDelayMem16[B] / 32768.0f;
-            // float sampleValue = alpha * (sample_B_float - myDelay->oldSample) + sample_A_float; 
+            float sample_A_float = (float)pDelayMem16[A+ch] / 32767.0f;
+            float sample_B_float = (float)pDelayMem16[B+ch] / 32767.0f;
+            float sampleValue = alpha * (sample_B_float - myDelay->oldSample[ch]) + sample_A_float; 
             
-            // myDelay->oldSample = sampleValue; //custom
+            myDelay->oldSample[ch] = sampleValue; //custom
             
-            // pbuf16[i] = (int16_t)(sampleValue * 32768.0f);
+            pbuf16[i+ch] = (int16_t)(sampleValue * 32767.0f);
 
-            // float delayedSample = inputSample + sampleValue * myDelay->feedback; //custom
-            // pDelayMem16[myDelay->writeIndex] = (int16_t)(delayedSample * 32768.0f);
+            float delayedSample = inputSample + sampleValue * myDelay->feedback; //custom
+            pDelayMem16[myDelay->writeIndex + ch] = (int16_t)(delayedSample * 32767.0f);
 
-            // myDelay->writeIndex = (myDelay->writeIndex + 1) % myDelay->memorySize; //custom
-
-            // // dry wet mix
-            // float outputSample = sampleValue * sqrtf(1 - dryWetRatio) + inputSample * sqrtf(dryWetRatio); //custom
             
-            // if (outputSample > 1.0f) outputSample = 1.0f; // custom
-            // else if (outputSample < -1.0f) outputSample = -1.0f; //custom
-
+            // dry wet mix
+            float outputSample = sampleValue * sqrtf(1 - dryWetRatio) + inputSample * sqrtf(dryWetRatio);
+            // float outputSample = sampleValue * (1 - dryWetRatio) + inputSample * (dryWetRatio); //custom
+            
             // DEBUG
             // if (outputSample > myDelay->max) {
             //     myDelay->max = outputSample; 
@@ -396,14 +335,89 @@ if (r_size > 0) {
             // myDelay->debug = myDelay->debug + 1; //custom da cancellare 
             // end DEBUG
             
-            // pbuf16[i] = (int16_t)(outputSample * 32768.0f);
+            pbuf16[i+ch] = (int16_t)(outputSample * 32767.0f);
             
-            // end vers 1
-        // }
-        ret = audio_element_output(self, (char *)myDelay->buf, BUF_SIZE);
-    } else {
-        ret = r_size;
+        }
+        // myDelay->writeIndex = (myDelay->writeIndex + 1) % myDelay->memorySize; //custom
+        myDelay->writeIndex = (myDelay->writeIndex + myDelay->channel) % myDelay->memorySize; //custom
     }
+    // end stereo version
+
+    // for(int i=0; i<r_size / 2; i++){ //custom 
+        // vers 1
+
+        // float inputSample = (float)pbuf16[i] / 32768.0f; //custom
+        // if (inputSample > 1.0f) inputSample = 1.0f; // custom
+        // else if (inputSample < -1.0f) inputSample = -1.0f; //custom
+        
+        // DEBUG
+        // if (inputSample > myDelay->max) {
+        //     myDelay->max = inputSample; 
+        // }
+        // if (inputSample < myDelay->min) {
+        //     myDelay->min = inputSample; 
+        // }
+        // if (myDelay->debug%100000==0) {
+        //     ESP_LOGI(TAG, "myDelay MAX inputSample: %.3f", myDelay->max); 
+        //     ESP_LOGI(TAG, "myDelay MIN inputSample: %.3f", myDelay->min); 
+        //     ESP_LOGI(TAG, "pbuf16[%d]: %d", i, pbuf16[i]);
+        // }
+        // end DEBUG
+        
+        // LFO_get_next_sample(myDelay->LFO_handle, &dt); //custom
+        // dt = fminf(dt, MYDELAY_MAX_DELAY_TIME); //custom: clamp to max delay time
+        // float readIndex = (float)myDelay->writeIndex - (dt * (float)myDelay->samplerate) ; //custom
+        // int integerPart = (int) readIndex; //custom
+        // float fractionalPart = readIndex - integerPart; //custom
+        // float alpha = fractionalPart / (2.0f - fractionalPart); //custom
+        
+        // int A = (integerPart + myDelay->memorySize) % myDelay->memorySize; //custom
+        // int B = (A + 1) % myDelay->memorySize; //custom
+
+        // pDelayMem16[myDelay->writeIndex] = pbuf16[i]; //custom
+
+        // float sample_A_float = (float)pDelayMem16[A] / 32768.0f;
+        // float sample_B_float = (float)pDelayMem16[B] / 32768.0f;
+        // float sampleValue = alpha * (sample_B_float - myDelay->oldSample) + sample_A_float; 
+        
+        // myDelay->oldSample = sampleValue; //custom
+        
+        // pbuf16[i] = (int16_t)(sampleValue * 32768.0f);
+
+        // float delayedSample = inputSample + sampleValue * myDelay->feedback; //custom
+        // pDelayMem16[myDelay->writeIndex] = (int16_t)(delayedSample * 32768.0f);
+
+        // myDelay->writeIndex = (myDelay->writeIndex + 1) % myDelay->memorySize; //custom
+
+        // // dry wet mix
+        // float outputSample = sampleValue * sqrtf(1 - dryWetRatio) + inputSample * sqrtf(dryWetRatio); //custom
+        
+        // if (outputSample > 1.0f) outputSample = 1.0f; // custom
+        // else if (outputSample < -1.0f) outputSample = -1.0f; //custom
+
+        // DEBUG
+        // if (outputSample > myDelay->max) {
+        //     myDelay->max = outputSample; 
+        // }
+        // if (outputSample < myDelay->min) {
+        //     myDelay->min = outputSample; 
+        // }
+        // if (myDelay->debug%100000==0) {
+        //     ESP_LOGI(TAG, "myDelay MAX outputSample: %.3f", myDelay->max); 
+        //     ESP_LOGI(TAG, "myDelay MIN outputSample: %.3f", myDelay->min); 
+        //     ESP_LOGI(TAG, "pbuf16[%d]: %d", i, pbuf16[i]);
+        // }
+        // myDelay->debug = myDelay->debug + 1; //custom da cancellare 
+        // end DEBUG
+        
+        // pbuf16[i] = (int16_t)(outputSample * 32768.0f);
+        
+        // end vers 1
+    // }
+    ret = audio_element_output(self, (char *)myDelay->buf, BUF_SIZE);
+} else {
+    ret = r_size;
+}
     return ret;
 }
 
