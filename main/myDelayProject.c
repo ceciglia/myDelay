@@ -76,12 +76,12 @@ void app_main(void)
     // ESP_LOGI(TAG, "R data_bit_width in i2s_stream_reader:%d", (int) i2s_cfg_read.std_cfg.slot_cfg.data_bit_width);
     // ESP_LOGI(TAG, "R slot_mode in i2s_stream_reader:%d", (int) i2s_cfg_read.std_cfg.slot_cfg.slot_mode);
 
-    LFO_cfg_t lfo_cfg = DEFAULT_LFO_CONFIG();
-    audio_element_handle_t lfo_handle = LFO_init(&lfo_cfg);
+    // LFO_cfg_t lfo_cfg = DEFAULT_LFO_CONFIG();
+    // audio_element_handle_t lfo_handle = LFO_init(&lfo_cfg);
 
     myDelay_cfg_t myDelay_cfg = DEFAULT_MYDELAY_CONFIG();
     delay = myDelay_init(&myDelay_cfg);
-    myDelay_set_LFO_handle(delay, lfo_handle); // custom: set LFO handle to myDelay
+    // myDelay_set_LFO_handle(delay, lfo_handle); // custom: set LFO handle to myDelay
 
     ESP_LOGI(TAG, "[3.3] Register all elements to audio pipeline");
     audio_pipeline_register(pipeline, i2s_stream_reader, "i2s_read");
@@ -106,7 +106,7 @@ void app_main(void)
     // ESP_LOGI(TAG, "AFTEREXE slot_mode in i2s_stream_writer:%d", (int) i2s_cfg.std_cfg.slot_cfg.slot_mode);
 
     ESP_LOGI(TAG, "[ 5 ] Start audio_pipeline");
-    audio_element_run(lfo_handle);   // custom: run LFO element
+    // audio_element_run(lfo_handle);   // custom: run LFO element
     audio_pipeline_run(pipeline);
 
     ESP_LOGI(TAG, "[ 6 ] Listen for all pipeline events");
@@ -133,8 +133,8 @@ void app_main(void)
     audio_pipeline_terminate(pipeline);
 
     //custom lfo
-    audio_element_stop(lfo_handle);
-    audio_element_wait_for_stop(lfo_handle);
+    // audio_element_stop(lfo_handle);
+    // audio_element_wait_for_stop(lfo_handle);
     // end custom lfo
 
     audio_pipeline_unregister(pipeline, i2s_stream_reader);
@@ -151,6 +151,6 @@ void app_main(void)
     audio_pipeline_deinit(pipeline);
     audio_element_deinit(i2s_stream_reader);
     audio_element_deinit(delay);
-    audio_element_deinit(lfo_handle); // custom: deinit LFO element
+    // audio_element_deinit(lfo_handle); // custom: deinit LFO element
     audio_element_deinit(i2s_stream_writer);
 }
