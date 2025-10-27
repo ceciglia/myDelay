@@ -8,7 +8,6 @@
 #include <math.h>
 #include "audio_element.h"
 #include "audio_common.h"
-// #include "LFO.h" //custom
 
 #ifdef __cplusplus
 extern "C"
@@ -63,23 +62,37 @@ esp_err_t myDelay_set_info(audio_element_handle_t self, int rate, int ch);
  * @brief      Set the feedback amount for the delay effect.
  *
  * @param      self         Audio element handle
- * @param      newFeedback  The new feedback value (0.0 to 0.95)
+ * @param      new_feedback  The new feedback value (0.0 to 0.95)
  *
  * @return     
  *             ESP_OK
  *             ESP_FAIL
  */
-esp_err_t myDelay_set_feedback(audio_element_handle_t self, float newFeedback); //custom
+esp_err_t myDelay_set_feedback(audio_element_handle_t self, float new_feedback); //custom
 
 /**
- * @brief 	   Assign the LFO handle to the Delay element for modulation.
+ * @brief      Set the base delay time for the delay effect.
  *
- * @param 	   self 	    Audio element handle (myDelay)
- * @param 	   lfo_handle   Audio element handle (LFO)
+ * @param      self         Audio element handle
+ * @param      new_base_dt    The new base delay time in seconds
  *
- * @return 	   ESP_OK or ESP_FAIL
+ * @return     
+ *             ESP_OK
+ *             ESP_FAIL
  */
-// esp_err_t myDelay_set_LFO_handle(audio_element_handle_t self, audio_element_handle_t lfo_handle);
+esp_err_t myDelay_set_base_dt(audio_element_handle_t self, float new_base_dt); //custom
+
+/**
+ * @brief      Set the dry/wet ratio for the delay effect.
+ *
+ * @param      self         Audio element handle
+ * @param      new_dw_ratio  The new dry/wet ratio
+ *
+ * @return     
+ *             ESP_OK
+ *             ESP_FAIL
+ */
+esp_err_t myDelay_set_dw_ratio(audio_element_handle_t self, float new_dw_ratio); //custom
 
 /**
  * @brief      Create an Audio Element handle that delay incoming data.
