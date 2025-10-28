@@ -7,6 +7,10 @@
 #include "board.h"
 #include "myDelay.h"
 
+#include "esp_peripherals.h"
+#include "periph_touch.h"
+#include "periph_adc_button.h"
+#include "periph_button.h"
 
 static const char *TAG = "MYDELAYPROJECT";
 
@@ -28,10 +32,13 @@ void app_main(void)
         .bits = AUDIO_HAL_BIT_LENGTH_16BITS,
     };     
 
-    audio_hal_set_volume(board_handle->audio_hal, 100);   // volume 0–100%
+    audio_hal_set_volume(board_handle->audio_hal, 60);   // volume 0–100%
     audio_hal_codec_iface_config(board_handle->audio_hal, AUDIO_HAL_CODEC_MODE_BOTH, &iface);
     audio_hal_ctrl_codec(board_handle->audio_hal, AUDIO_HAL_CODEC_MODE_BOTH, AUDIO_HAL_CTRL_START);
     audio_hal_enable_pa(board_handle->audio_hal, true); 
+
+    int player_volume;
+    audio_hal_get_volume(board_handle->audio_hal, &player_volume);
 
     ESP_LOGI(TAG, "[ 2 ] Create audio pipeline for playback");
     audio_pipeline_cfg_t pipeline_cfg = DEFAULT_AUDIO_PIPELINE_CONFIG();
@@ -81,6 +88,16 @@ void app_main(void)
     const char *link_tag[3] = {"i2s_read", "delay", "i2s_write"};
     audio_pipeline_link(pipeline, &link_tag[0], 3);
 
+    // peripherals
+    ESP_LOGI(TAG, "[ 3 ] Initialize peripherals"); //CHECKKKK
+    esp_periph_config_t periph_cfg = DEFAULT_ESP_PERIPH_SET_CONFIG();
+    esp_periph_set_handle_t set = esp_periph_set_init(&periph_cfg);
+
+    ESP_LOGI(TAG, "[3.1] Initialize keys on board");
+    audio_board_key_init(set);
+
+    //end peripherals
+
     ESP_LOGI(TAG, "[ 4 ] Set up  event listener");
     audio_event_iface_cfg_t evt_cfg = AUDIO_EVENT_IFACE_DEFAULT_CFG();
     audio_event_iface_handle_t evt = audio_event_iface_init(&evt_cfg);
@@ -88,11 +105,21 @@ void app_main(void)
     ESP_LOGI(TAG, "[4.1] Listening event from all elements of pipeline");
     audio_pipeline_set_listener(pipeline, evt);
 
+    //perip
+    ESP_LOGI(TAG, "[4.2] Listening event from peripherals"); // CHECKKKK
+    audio_event_iface_set_listener(esp_periph_set_get_event_iface(set), evt);
+    // end perip
+
     i2s_stream_set_clk(i2s_stream_reader, 48000, 16, 2); // CHECKK THIS 
     i2s_stream_set_clk(i2s_stream_writer, 48000, 16, 2); /// CHECKK THIS
     
     ESP_LOGI(TAG, "[ 5 ] Start audio_pipeline");
     audio_pipeline_run(pipeline);
+
+    // testing
+    float base_dt = myDelay_get_base_dt_target(delay);
+    int wf = myDelay_get_LFO_waveform(delay);
+    // end testing
 
     ESP_LOGI(TAG, "[ 6 ] Listen for all pipeline events");
     while (1) {
@@ -102,6 +129,81 @@ void app_main(void)
             ESP_LOGE(TAG, "[ * ] Event interface error : %d", ret);
             continue;
         }
+
+        // peripherals management
+        if ((msg.source_type == PERIPH_ID_TOUCH || msg.source_type == PERIPH_ID_BUTTON || msg.source_type == PERIPH_ID_ADC_BTN)
+            && (msg.cmd == PERIPH_TOUCH_TAP || msg.cmd == PERIPH_BUTTON_PRESSED || msg.cmd == PERIPH_ADC_BUTTON_PRESSED)) {
+            if ((int) msg.data == get_input_play_id()) { // key 3
+                ESP_LOGI(TAG, "[ * ] [Play] touch tap event");
+                wf = (wf + 1) % 4;
+                myDelay_set_LFO_waveform(delay, wf); // example
+                ESP_LOGI(TAG, "[ * ] current LFO waveform: %d", myDelay_get_LFO_waveform(delay));
+                // audio_element_state_t el_state = audio_element_get_state(i2s_stream_writer);
+                // switch (el_state) {
+                //     case AEL_STATE_INIT :
+                //         ESP_LOGI(TAG, "[ * ] Starting audio pipeline");
+                //         audio_pipeline_run(pipeline);
+                //         break;
+                //     case AEL_STATE_RUNNING :
+                //         ESP_LOGI(TAG, "[ * ] Pausing audio pipeline");
+                //         audio_pipeline_pause(pipeline);
+                //         break;
+                //     case AEL_STATE_PAUSED :
+                //         ESP_LOGI(TAG, "[ * ] Resuming audio pipeline");
+                //         audio_pipeline_resume(pipeline);
+                //         break;
+                //     case AEL_STATE_FINISHED :
+                //         ESP_LOGI(TAG, "[ * ] Rewinding audio pipeline");
+                //         audio_pipeline_reset_ringbuffer(pipeline);
+                //         audio_pipeline_reset_elements(pipeline);
+                //         audio_pipeline_change_state(pipeline, AEL_STATE_INIT);
+                //         set_next_file_marker();
+                //         audio_pipeline_run(pipeline);
+                //         break;
+                //     default :
+                //         ESP_LOGI(TAG, "[ * ] Not supported state %d", el_state);
+                // }
+            } else if ((int) msg.data == get_input_set_id()) { // key 4
+                ESP_LOGI(TAG, "[ * ] [Set] touch tap event");
+                ESP_LOGI(TAG, "[ * ] Stopping audio pipeline");
+                break;
+            } else if ((int) msg.data == get_input_mode_id()) { // key 1
+                ESP_LOGI(TAG, "[ * ] [mode] tap event");
+                base_dt -= 0.2f;
+                base_dt = base_dt < 0.0f ? 0.0f : base_dt;
+                myDelay_set_base_dt_target(delay, base_dt); // example
+                ESP_LOGI(TAG, "[ * ] current base delay time target: %.2f seconds", myDelay_get_base_dt_target(delay));
+                // audio_pipeline_stop(pipeline);
+                // audio_pipeline_wait_for_stop(pipeline);
+                // audio_pipeline_terminate(pipeline);
+                // audio_pipeline_reset_ringbuffer(pipeline);
+                // audio_pipeline_reset_elements(pipeline);
+                // set_next_file_marker();
+                // audio_pipeline_run(pipeline);
+            } else if ((int) msg.data == get_input_rec_id()) { // key 2
+                ESP_LOGI(TAG, "[ * ] [Rec] touch tap event");
+                base_dt += 0.2f;
+                myDelay_set_base_dt_target(delay, base_dt); // example
+                ESP_LOGI(TAG, "[ * ] current base delay time target: %.2f seconds", myDelay_get_base_dt_target(delay));
+            } else if ((int) msg.data == get_input_volup_id()) { // key 6
+                ESP_LOGI(TAG, "[ * ] [Vol+] touch tap event");
+                player_volume += 10;
+                if (player_volume > 100) {
+                    player_volume = 100;
+                }
+                audio_hal_set_volume(board_handle->audio_hal, player_volume);
+                ESP_LOGI(TAG, "[ * ] Volume set to %d %%", player_volume);
+            } else if ((int) msg.data == get_input_voldown_id()) { // key 5
+                ESP_LOGI(TAG, "[ * ] [Vol-] touch tap event");
+                player_volume -= 10;
+                if (player_volume < 0) {
+                    player_volume = 0;
+                }
+                audio_hal_set_volume(board_handle->audio_hal, player_volume);
+                ESP_LOGI(TAG, "[ * ] Volume set to %d %%", player_volume);
+            }
+        }
+        /// end of peripherals management
 
         /* Stop when the last pipeline element (i2s_stream_writer in this case) receives stop event */
         if (msg.source_type == AUDIO_ELEMENT_TYPE_ELEMENT && msg.source == (void *) i2s_stream_writer

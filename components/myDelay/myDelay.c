@@ -32,11 +32,13 @@ typedef struct myDelay {
     unsigned char *delay_memory; //custom
     int memory_size;     //custom
     float base_dt; //custom
+    float base_dt_target; //custom 
     int write_index;   //custom
     float old_sample[2]; //custom
     float feedback;   //custom
     LFO_t *LFO_handle; //custom
     float dw_ratio; //custom
+    float alpha; //custom da cancellare
     int debug; //custom da cancellare
     float max; //custom da cancellare
     float min; //custom da cancellare
@@ -91,6 +93,24 @@ esp_err_t myDelay_set_info(audio_element_handle_t self, int rate, int ch)
 
 //custom
 
+esp_err_t myDelay_compute_smoothed_value(myDelay_t *myDelay) {
+    // y[n] = y[n-1] + alpha (x[n] - y[n-1])
+    myDelay->base_dt = myDelay->base_dt + myDelay->alpha * (myDelay->base_dt_target - myDelay->base_dt);
+    return ESP_OK;
+}
+
+esp_err_t myDelay_set_base_dt_target(audio_element_handle_t self, float new_base_dt_target) {
+    myDelay_t *myDelay = (myDelay_t *)audio_element_getdata(self);
+    if (new_base_dt_target < 0.001f || new_base_dt_target > MYDELAY_MAX_DELAY_TIME) { // check boundaries
+        ESP_LOGE(TAG, "Base delay time must be between 0.001 and %.2f seconds. (line %d)", MYDELAY_MAX_DELAY_TIME, __LINE__);
+        return ESP_ERR_INVALID_ARG;
+    }
+    myDelay->base_dt_target = new_base_dt_target;
+    myDelay_compute_smoothed_value(myDelay);
+    ESP_LOGI(TAG, "Base delay time target set to %.2f seconds", new_base_dt_target);
+    return ESP_OK;
+}
+
 esp_err_t myDelay_set_feedback(audio_element_handle_t self, float new_feedback) {
     myDelay_t *myDelay = (myDelay_t *)audio_element_getdata(self);
     if (new_feedback < 0.0f || new_feedback > 0.95f) {
@@ -99,17 +119,6 @@ esp_err_t myDelay_set_feedback(audio_element_handle_t self, float new_feedback) 
     }
     myDelay->feedback = new_feedback;
     ESP_LOGI(TAG, "Feedback set to %.2f", new_feedback);
-    return ESP_OK;
-}
-
-esp_err_t myDelay_set_base_dt(audio_element_handle_t self, float new_base_dt) {
-    myDelay_t *myDelay = (myDelay_t *)audio_element_getdata(self);
-    if (new_base_dt < 0.001f || new_base_dt > MYDELAY_MAX_DELAY_TIME) { // check boundaries
-        ESP_LOGE(TAG, "Base delay time must be between 0.001 and %.2f seconds. (line %d)", MYDELAY_MAX_DELAY_TIME, __LINE__);
-        return ESP_ERR_INVALID_ARG;
-    }
-    myDelay->base_dt = new_base_dt;
-    ESP_LOGI(TAG, "Base delay time set to %.2f seconds", new_base_dt);
     return ESP_OK;
 }
 
@@ -123,6 +132,23 @@ esp_err_t myDelay_set_dw_ratio(audio_element_handle_t self, float new_dw_ratio) 
     ESP_LOGI(TAG, "Dry/Wet ratio set to %.2f", new_dw_ratio);
     return ESP_OK;
 }
+
+float myDelay_get_base_dt_target(audio_element_handle_t self) {
+    myDelay_t *myDelay = (myDelay_t *)audio_element_getdata(self);
+    return myDelay->base_dt;
+}
+
+float myDelay_get_feedback(audio_element_handle_t self) {
+    myDelay_t *myDelay = (myDelay_t *)audio_element_getdata(self);
+    return myDelay->feedback;
+}
+
+float myDelay_get_dw_ratio(audio_element_handle_t self) {
+    myDelay_t *myDelay = (myDelay_t *)audio_element_getdata(self);
+    return myDelay->dw_ratio;
+}
+
+
 
 // LFO
 esp_err_t myDelay_set_LFO_frequency(audio_element_handle_t self, float new_frequency) {
@@ -158,6 +184,21 @@ esp_err_t myDelay_set_LFO_mod_amount(audio_element_handle_t self, float new_mod_
     return ESP_OK;
 }
 
+float myDelay_get_LFO_frequency(audio_element_handle_t self) {
+    myDelay_t *myDelay = (myDelay_t *)audio_element_getdata(self);
+    return myDelay->LFO_handle->frequency;
+}
+
+int myDelay_get_LFO_waveform(audio_element_handle_t self) {
+    myDelay_t *myDelay = (myDelay_t *)audio_element_getdata(self);
+    return myDelay->LFO_handle->waveform;
+}
+
+float myDelay_get_LFO_mod_amount(audio_element_handle_t self) {
+    myDelay_t *myDelay = (myDelay_t *)audio_element_getdata(self);
+    return myDelay->LFO_handle->mod_amount;
+}
+
 esp_err_t LFO_prepare_to_play(LFO_t *LFO, audio_element_handle_t my_d) 
 {
     myDelay_t *myDelay = (myDelay_t *)audio_element_getdata(my_d);
@@ -165,9 +206,9 @@ esp_err_t LFO_prepare_to_play(LFO_t *LFO, audio_element_handle_t my_d)
     LFO->channel = 1; // LFO is always mono
     LFO->current_phase = 0.0f; 
     LFO->sampling_period = 1.0f / (float)LFO->samplerate;
-    LFO->frequency = 0.1f; //custom
+    LFO->frequency = 1.0f; //custom
     LFO->waveform = 2;  //custom: triangle wave
-    LFO->mod_amount = 0.001f; //custom: modulation amount
+    LFO->mod_amount = 0.01f; //custom: modulation amount
     LFO->debugCount = 0; //DEBUG DA CANCELLARE
     ESP_LOGI(TAG, "LFO setup completed.");
     return ESP_OK;
@@ -292,6 +333,8 @@ static esp_err_t myDelay_open(audio_element_handle_t self)
     myDelay->old_sample[0] = 0.0f; //custom
     myDelay->old_sample[1] = 0.0f; //custom
     myDelay->dw_ratio = 0.5f; //custom
+    myDelay->base_dt_target = myDelay->base_dt; //custom
+    myDelay->alpha = 0.5f; // smoothing factor
     myDelay->debug = 0; //custom da cancellare
     myDelay->max = 0.0f; //custom da cancellare
     myDelay->min = 0.0f; //custom da cancellare
@@ -435,16 +478,18 @@ if (r_size > 0) {
             // }
             if (myDelay->debug%1000001==0) {
                 ESP_LOGI(TAG, "my Delay SPECS");
-                ESP_LOGI(TAG, "my Delay input_sample[%d][%d]: %.3f", i, ch, input_sample);
-                ESP_LOGI(TAG, "my Delay read_index[%d][%d]: %.3f", i, ch, read_index);
-                ESP_LOGI(TAG, "my Delay integer_part[%d][%d]: %d", i, ch, integer_part);
-                ESP_LOGI(TAG, "my Delay fractional_part[%d][%d]: %.3f", i, ch, fractional_part);
-                ESP_LOGI(TAG, "my Delay alpha[%d][%d]: %.3f", i, ch, alpha);
-                ESP_LOGI(TAG, "my Delay A index[%d][%d]: %d", i, ch, A);
-                ESP_LOGI(TAG, "my Delay B index[%d][%d]: %d", i, ch, B);
-                ESP_LOGI(TAG, "write_index + ch and ch: %d %d", myDelay->write_index + ch, ch);
-                ESP_LOGI(TAG, "my Delay memory_size: %d", myDelay->memory_size);
+                // ESP_LOGI(TAG, "my Delay input_sample[%d][%d]: %.3f", i, ch, input_sample);
+                // ESP_LOGI(TAG, "my Delay read_index[%d][%d]: %.3f", i, ch, read_index);
+                // ESP_LOGI(TAG, "my Delay integer_part[%d][%d]: %d", i, ch, integer_part);
+                // ESP_LOGI(TAG, "my Delay fractional_part[%d][%d]: %.3f", i, ch, fractional_part);
+                // ESP_LOGI(TAG, "my Delay alpha[%d][%d]: %.3f", i, ch, alpha);
+                // ESP_LOGI(TAG, "my Delay A index[%d][%d]: %d", i, ch, A);
+                // ESP_LOGI(TAG, "my Delay B index[%d][%d]: %d", i, ch, B);
+                // ESP_LOGI(TAG, "write_index + ch and ch: %d %d", myDelay->write_index + ch, ch);
+                // ESP_LOGI(TAG, "my Delay memory_size: %d", myDelay->memory_size);
+                ESP_LOGI(TAG, "my Delay feedback: %.3f", myDelay->feedback);
                 ESP_LOGI(TAG, "myDelay current_dt: %.3f", current_dt);
+                ESP_LOGI(TAG, "my Delay base dt: %.3f", myDelay->base_dt);
                 
 
             //     ESP_LOGI(TAG, "myDelay MAX output_sample: %.3f", myDelay->max); 
