@@ -125,10 +125,41 @@ esp_err_t myDelay_set_dw_ratio(audio_element_handle_t self, float new_dw_ratio) 
 }
 
 // LFO
+esp_err_t myDelay_set_LFO_frequency(audio_element_handle_t self, float new_frequency) {
+    myDelay_t *myDelay = (myDelay_t *)audio_element_getdata(self);
+    if (new_frequency < 0.01f || new_frequency > 10.0f) { // check boundaries
+        ESP_LOGE(TAG, "LFO frequency must be between 0.01 and 10.0 Hz. (line %d)", __LINE__);
+        return ESP_ERR_INVALID_ARG;
+    }
+    myDelay->LFO_handle->frequency = new_frequency;
+    ESP_LOGI(TAG, "LFO frequency set to %.2f Hz", new_frequency);
+    return ESP_OK;
+}
+
+esp_err_t myDelay_set_LFO_waveform(audio_element_handle_t self, int new_waveform) {
+    myDelay_t *myDelay = (myDelay_t *)audio_element_getdata(self);
+    if (new_waveform < 0 || new_waveform > 3) { // check boundaries
+        ESP_LOGE(TAG, "LFO waveform must be between 0 and 3. (line %d)", __LINE__); //check error message
+        return ESP_ERR_INVALID_ARG;
+    }
+    myDelay->LFO_handle->waveform = new_waveform;
+    ESP_LOGI(TAG, "LFO waveform set to %d", new_waveform);
+    return ESP_OK;
+}
+
+esp_err_t myDelay_set_LFO_mod_amount(audio_element_handle_t self, float new_mod_amount) {
+    myDelay_t *myDelay = (myDelay_t *)audio_element_getdata(self);
+    if (new_mod_amount < 0.001f || new_mod_amount > 1.0f) { // check boundaries
+        ESP_LOGE(TAG, "LFO modulation amount must be between 0.001 and 1. (line %d)", __LINE__); //check error message
+        return ESP_ERR_INVALID_ARG;
+    }
+    myDelay->LFO_handle->mod_amount = new_mod_amount;
+    ESP_LOGI(TAG, "LFO modulation amount set to %.4f", new_mod_amount);
+    return ESP_OK;
+}
 
 esp_err_t LFO_prepare_to_play(LFO_t *LFO, audio_element_handle_t my_d) 
 {
-    // LFO_t *LFO = (LFO_t *)audio_element_getdata(self);
     myDelay_t *myDelay = (myDelay_t *)audio_element_getdata(my_d);
     LFO->samplerate = myDelay->samplerate;
     LFO->channel = 1; // LFO is always mono
@@ -139,7 +170,6 @@ esp_err_t LFO_prepare_to_play(LFO_t *LFO, audio_element_handle_t my_d)
     LFO->mod_amount = 0.001f; //custom: modulation amount
     LFO->debugCount = 0; //DEBUG DA CANCELLARE
     ESP_LOGI(TAG, "LFO setup completed.");
-    ESP_LOGI(TAG, "LFO sampling period: %.6f", LFO->sampling_period);
     return ESP_OK;
 }
 
@@ -187,11 +217,10 @@ float LFO_get_next_sample(LFO_t *LFO)
     // LFO->debugCount++;
     return sample;
 }
-
 // end LFO
 
-
 //end custom
+
 
 static esp_err_t myDelay_destroy(audio_element_handle_t self)
 {
