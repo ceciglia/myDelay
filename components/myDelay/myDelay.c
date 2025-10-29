@@ -11,17 +11,19 @@
 
 static const char *TAG = "MYDELAY";
 
-// #define BUF_SIZE (128)
 #define BUF_SIZE (512) // custom value
 
 typedef struct LFO {
     int  samplerate;
     int  channel; // number of channels
     float frequency; //custom
+    float frequency_target; //custom
     int waveform;  //custom
     float current_phase; //custom
     float sampling_period; //custom
     float mod_amount; //custom
+    float mod_amount_target; //custom
+    float alpha; //custom
     int debugCount; //DEBUG DA CANCELLARE
 } LFO_t;
 
@@ -36,8 +38,10 @@ typedef struct myDelay {
     int write_index;   //custom
     float old_sample[2]; //custom
     float feedback;   //custom
+    float feedback_target; //custom
     LFO_t *LFO_handle; //custom
     float dw_ratio; //custom
+    float dw_ratio_target; //custom
     float alpha; //custom da cancellare
     int debug; //custom da cancellare
     float max; //custom da cancellare
@@ -93,9 +97,13 @@ esp_err_t myDelay_set_info(audio_element_handle_t self, int rate, int ch)
 
 //custom
 
-esp_err_t myDelay_compute_smoothed_value(myDelay_t *myDelay) {
+esp_err_t myDelay_compute_smoothed_values(myDelay_t *myDelay) {
     // y[n] = y[n-1] + alpha (x[n] - y[n-1])
     myDelay->base_dt = myDelay->base_dt + myDelay->alpha * (myDelay->base_dt_target - myDelay->base_dt);
+    myDelay->feedback = myDelay->feedback + myDelay->alpha * (myDelay->feedback_target - myDelay->feedback);
+    myDelay->dw_ratio = myDelay->dw_ratio + myDelay->alpha * (myDelay->dw_ratio_target - myDelay->dw_ratio);
+    myDelay->LFO_handle->frequency = myDelay->LFO_handle->frequency + myDelay->LFO_handle->alpha * (myDelay->LFO_handle->frequency_target - myDelay->LFO_handle->frequency);
+    myDelay->LFO_handle->mod_amount = myDelay->LFO_handle->mod_amount + myDelay->LFO_handle->alpha * (myDelay->LFO_handle->mod_amount_target - myDelay->LFO_handle->mod_amount);
     return ESP_OK;
 }
 
@@ -106,7 +114,6 @@ esp_err_t myDelay_set_base_dt_target(audio_element_handle_t self, float new_base
         return ESP_ERR_INVALID_ARG;
     }
     myDelay->base_dt_target = new_base_dt_target;
-    myDelay_compute_smoothed_value(myDelay);
     ESP_LOGI(TAG, "Base delay time target set to %.2f seconds", new_base_dt_target);
     return ESP_OK;
 }
@@ -117,7 +124,7 @@ esp_err_t myDelay_set_feedback(audio_element_handle_t self, float new_feedback) 
         ESP_LOGE(TAG, "Feedback must be between 0.0 and 0.95. (line %d)", __LINE__);
         return ESP_ERR_INVALID_ARG;
     }
-    myDelay->feedback = new_feedback;
+    myDelay->feedback_target = new_feedback;
     ESP_LOGI(TAG, "Feedback set to %.2f", new_feedback);
     return ESP_OK;
 }
@@ -128,7 +135,7 @@ esp_err_t myDelay_set_dw_ratio(audio_element_handle_t self, float new_dw_ratio) 
         ESP_LOGE(TAG, "Dry/Wet ratio must be between 0.0 and 1.0. (line %d)", __LINE__);
         return ESP_ERR_INVALID_ARG;
     }
-    myDelay->dw_ratio = new_dw_ratio;
+    myDelay->dw_ratio_target = new_dw_ratio;
     ESP_LOGI(TAG, "Dry/Wet ratio set to %.2f", new_dw_ratio);
     return ESP_OK;
 }
@@ -157,7 +164,7 @@ esp_err_t myDelay_set_LFO_frequency(audio_element_handle_t self, float new_frequ
         ESP_LOGE(TAG, "LFO frequency must be between 0.01 and 10.0 Hz. (line %d)", __LINE__);
         return ESP_ERR_INVALID_ARG;
     }
-    myDelay->LFO_handle->frequency = new_frequency;
+    myDelay->LFO_handle->frequency_target = new_frequency;
     ESP_LOGI(TAG, "LFO frequency set to %.2f Hz", new_frequency);
     return ESP_OK;
 }
@@ -179,7 +186,7 @@ esp_err_t myDelay_set_LFO_mod_amount(audio_element_handle_t self, float new_mod_
         ESP_LOGE(TAG, "LFO modulation amount must be between 0.001 and 1. (line %d)", __LINE__); //check error message
         return ESP_ERR_INVALID_ARG;
     }
-    myDelay->LFO_handle->mod_amount = new_mod_amount;
+    myDelay->LFO_handle->mod_amount_target = new_mod_amount;
     ESP_LOGI(TAG, "LFO modulation amount set to %.4f", new_mod_amount);
     return ESP_OK;
 }
@@ -207,8 +214,11 @@ esp_err_t LFO_prepare_to_play(LFO_t *LFO, audio_element_handle_t my_d)
     LFO->current_phase = 0.0f; 
     LFO->sampling_period = 1.0f / (float)LFO->samplerate;
     LFO->frequency = 1.0f; //custom
-    LFO->waveform = 2;  //custom: triangle wave
+    LFO->waveform = 1;  //custom: triangle wave
     LFO->mod_amount = 0.01f; //custom: modulation amount
+    LFO->alpha = 1.0f - expf(-1.0f/(0.3f * (float)myDelay->samplerate)); //custom da cancellare
+    LFO->frequency_target = LFO->frequency; //custom
+    LFO->mod_amount_target = LFO->mod_amount; //custom
     LFO->debugCount = 0; //DEBUG DA CANCELLARE
     ESP_LOGI(TAG, "LFO setup completed.");
     return ESP_OK;
@@ -229,17 +239,17 @@ float LFO_get_next_sample(LFO_t *LFO)
         case 0: // Sine wave
             sample = sinf(LFO->current_phase * 2.0f * M_PI);
             break;
-        case 1: // Square wave
-            sample = (LFO->current_phase >= 0.5f) ? 1.0f : -1.0f;
-            break;
-        case 2: // Triangle wave
+        case 1: // Triangle wave
             sample = 4.0f * fabsf(LFO->current_phase - 0.5f) - 1.0f; //check
+            break;
+        case 2: // Square wave
+            sample = (LFO->current_phase >= 0.5f) ? 1.0f : -1.0f;
             break;
         case 3: // Sawtooth wave (rising)
             sample = 2.0f * LFO->current_phase - 1.0f; //check
             break;
         default:
-            // sample = 0.0f; // Default to silence for unknown waveform types
+            sample = 0.0f; // Default to silence for unknown waveform types
             break;
     }
     
@@ -334,7 +344,10 @@ static esp_err_t myDelay_open(audio_element_handle_t self)
     myDelay->old_sample[1] = 0.0f; //custom
     myDelay->dw_ratio = 0.5f; //custom
     myDelay->base_dt_target = myDelay->base_dt; //custom
-    myDelay->alpha = 0.5f; // smoothing factor
+    myDelay->feedback_target = myDelay->feedback; //custom
+    myDelay->dw_ratio_target = myDelay->dw_ratio; //custom
+    myDelay->alpha = 1.0f - expf(-1.0f/(0.3f * (float)myDelay->samplerate)); //custom da cancellare
+    ESP_LOGI(TAG, "Smoothing alpha: %.6f", myDelay->alpha);
     myDelay->debug = 0; //custom da cancellare
     myDelay->max = 0.0f; //custom da cancellare
     myDelay->min = 0.0f; //custom da cancellare
@@ -413,11 +426,12 @@ if (r_size > 0) {
 
     // stereo version
     for(int i = 0; i < num_samples; i += 2) { //custom
+        myDelay_compute_smoothed_values(myDelay); //custom
         float mod = LFO_get_next_sample(myDelay->LFO_handle); //custom
         float current_dt = myDelay->base_dt + mod; //custom 
         current_dt = current_dt > MYDELAY_MAX_DELAY_TIME ? MYDELAY_MAX_DELAY_TIME : current_dt; //custom: clamp to max delay time
         for (int ch = 0; ch < myDelay->channel; ch++) { //custom
-            float input_sample = (float)p_buf_16[i+ch] / 32767.0f; //custom
+            float input_sample = (float)p_buf_16[i + ch] / 32767.0f; //custom
             // DEBUG
             // if (input_sample > myDelay->max) {
             //     myDelay->max = input_sample; 
@@ -442,12 +456,11 @@ if (r_size > 0) {
             float fractional_part = read_index - integer_part; //custom
             float alpha = fractional_part / (2.0f - fractional_part); //custom
             
-            // integer_part = (integer_part%2==0 && ch==0) || (integer_part%2==1 && ch==1) ? integer_part : (ch==0 ? integer_part - 1 : integer_part + 1); //custom: force even index for left channel
-            int A = (integer_part + myDelay->memory_size) % myDelay->memory_size; //custommmmmmmmmmmmm
-            A = (A%2==0 && ch==0) || (A%2==1 && ch==1) ? A : (ch==0 ? A - 1 : A + 1);
+            int A = (integer_part + myDelay->memory_size) % myDelay->memory_size; //custom
+            A = (A % 2 == 0 && ch == 0) || (A % 2 == 1 && ch == 1) ? A : (ch == 0 ? A - 1 : A + 1);
             int B = (A + myDelay->channel) % myDelay->memory_size; //custom
 
-            p_delay_memory_16[myDelay->write_index + ch] = p_buf_16[i+ch]; //custom
+            p_delay_memory_16[myDelay->write_index + ch] = p_buf_16[i + ch]; //custom
             // if (myDelay->debug%100001==0) {
                 // ESP_LOGI(TAG, "my Delay after mydelat memory assignment");
                 // ESP_LOGI(TAG, "my Delay p_delay_memory_16[write_index + ch][%d][%d]: %d", i, ch, p_delay_memory_16[myDelay->write_index + ch]);
@@ -460,12 +473,12 @@ if (r_size > 0) {
             
             myDelay->old_sample[ch] = sample_value; //custom
             
-            p_buf_16[i+ch] = (int16_t)(sample_value * 32767.0f);
-
+            p_buf_16[i + ch] = (int16_t)(sample_value * 32767.0f);
+            
+            // feedback
             float delayed_sample = input_sample + sample_value * myDelay->feedback; //custom
             p_delay_memory_16[myDelay->write_index + ch] = (int16_t)(delayed_sample * 32767.0f);
 
-            
             // dry wet mix
             float output_sample = sample_value * sqrtf(1.0f - myDelay->dw_ratio) + input_sample * sqrtf(myDelay->dw_ratio);
             
@@ -490,6 +503,7 @@ if (r_size > 0) {
                 ESP_LOGI(TAG, "my Delay feedback: %.3f", myDelay->feedback);
                 ESP_LOGI(TAG, "myDelay current_dt: %.3f", current_dt);
                 ESP_LOGI(TAG, "my Delay base dt: %.3f", myDelay->base_dt);
+                ESP_LOGI(TAG, "DRY WET RATIO: %.3f", myDelay->dw_ratio);
                 
 
             //     ESP_LOGI(TAG, "myDelay MAX output_sample: %.3f", myDelay->max); 

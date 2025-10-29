@@ -20,7 +20,7 @@ extern "C"
  */
 typedef struct myDelay_cfg {
     int samplerate;  /*!< Audio sample rate (in Hz)*/
-    int channel;     /*!< Number of audio channels (Mono=1, Dual=2) */
+    int channel;     /*!< Number of audio channels (Mono=1, Stereo=2) */
     int out_rb_size; /*!< Size of output ring buffer */
     int task_stack;  /*!< Task stack size */
     int task_core;   /*!< Task running in core...*/
