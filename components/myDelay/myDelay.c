@@ -42,7 +42,17 @@ typedef struct myDelay {
     LFO_t *LFO_handle; //custom
     float dw_ratio; //custom
     float dw_ratio_target; //custom
-    float alpha; //custom da cancellare
+    float alpha; //custom 
+    //test
+    float w; //custom da cancellare
+    float a1; //custom da cancellare
+    float a2; //custom da cancellare
+    float b0; //custom da cancellare
+    float b1; //custom da cancellare
+    float b2; //custom da cancellare
+    float w1; //custom da cancellare
+    float w2; //custom da cancellare
+    //test
     int debug; //custom da cancellare
     float max; //custom da cancellare
     float min; //custom da cancellare
@@ -99,6 +109,7 @@ esp_err_t myDelay_set_info(audio_element_handle_t self, int rate, int ch)
 
 esp_err_t myDelay_compute_smoothed_values(myDelay_t *myDelay) {
     // y[n] = y[n-1] + alpha (x[n] - y[n-1])
+    // y[n] = alpha * x[n] + (1 - alpha) y[n-1]
     myDelay->base_dt = myDelay->base_dt + myDelay->alpha * (myDelay->base_dt_target - myDelay->base_dt);
     myDelay->feedback = myDelay->feedback + myDelay->alpha * (myDelay->feedback_target - myDelay->feedback);
     myDelay->dw_ratio = myDelay->dw_ratio + myDelay->alpha * (myDelay->dw_ratio_target - myDelay->dw_ratio);
@@ -107,25 +118,35 @@ esp_err_t myDelay_compute_smoothed_values(myDelay_t *myDelay) {
     return ESP_OK;
 }
 
-esp_err_t myDelay_set_base_dt_target(audio_element_handle_t self, float new_base_dt_target) {
-    myDelay_t *myDelay = (myDelay_t *)audio_element_getdata(self);
-    if (new_base_dt_target < 0.001f || new_base_dt_target > MYDELAY_MAX_DELAY_TIME) { // check boundaries
-        ESP_LOGE(TAG, "Base delay time must be between 0.001 and %.2f seconds. (line %d)", MYDELAY_MAX_DELAY_TIME, __LINE__);
+// esp_err_t myDelay_compute_smoothed_values(myDelay_t *myDelay) {
+//     // w[n] = x[n] - a1 * w[n-1] - a2 * w[n-2]
+//     // y[n] = b0 * w[n] + b1 * w[n-1] + b2 * w[n-2]
+//     myDelay->w = myDelay->base_dt_target - myDelay->a1 * myDelay->w1 - myDelay->a2 * myDelay->w2;
+//     myDelay->base_dt = myDelay->b0 *myDelay->w + myDelay->b1 * myDelay->w1 + myDelay->b2 * myDelay->w2;
+//     myDelay->w2 = myDelay->w1;
+//     myDelay->w1 = myDelay->w;
+//     return ESP_OK;
+// }
+
+esp_err_t myDelay_set_base_dt_target(audio_element_handle_t self, float new_base_dt_target) { // STEP 0.0001
+    myDelay_t *myDelay = (myDelay_t *)audio_element_getdata(self); 
+    if (new_base_dt_target < 0.0001f || new_base_dt_target > MYDELAY_MAX_DELAY_TIME) { 
+        ESP_LOGE(TAG, "Base delay time must be between 0.001 and %.4f seconds. (line %d)", MYDELAY_MAX_DELAY_TIME, __LINE__);
         return ESP_ERR_INVALID_ARG;
     }
     myDelay->base_dt_target = new_base_dt_target;
-    ESP_LOGI(TAG, "Base delay time target set to %.2f seconds", new_base_dt_target);
+    ESP_LOGI(TAG, "Base delay time target set to %.4f seconds", new_base_dt_target);
     return ESP_OK;
 }
 
-esp_err_t myDelay_set_feedback(audio_element_handle_t self, float new_feedback) {
+esp_err_t myDelay_set_feedback(audio_element_handle_t self, float new_feedback) {   // STEP 0.001
     myDelay_t *myDelay = (myDelay_t *)audio_element_getdata(self);
-    if (new_feedback < 0.0f || new_feedback > 0.95f) {
-        ESP_LOGE(TAG, "Feedback must be between 0.0 and 0.95. (line %d)", __LINE__);
+    if (new_feedback < 0.000f || new_feedback > 0.999f) { 
+        ESP_LOGE(TAG, "Feedback must be between 0 and 0.999. (line %d)", __LINE__);
         return ESP_ERR_INVALID_ARG;
     }
     myDelay->feedback_target = new_feedback;
-    ESP_LOGI(TAG, "Feedback set to %.2f", new_feedback);
+    ESP_LOGI(TAG, "Feedback set to %.3f", new_feedback);
     return ESP_OK;
 }
 
@@ -155,13 +176,11 @@ float myDelay_get_dw_ratio(audio_element_handle_t self) {
     return myDelay->dw_ratio;
 }
 
-
-
 // LFO
-esp_err_t myDelay_set_LFO_frequency(audio_element_handle_t self, float new_frequency) {
+esp_err_t myDelay_set_LFO_frequency(audio_element_handle_t self, float new_frequency) { // STEP 0.01
     myDelay_t *myDelay = (myDelay_t *)audio_element_getdata(self);
-    if (new_frequency < 0.01f || new_frequency > 10.0f) { // check boundaries
-        ESP_LOGE(TAG, "LFO frequency must be between 0.01 and 10.0 Hz. (line %d)", __LINE__);
+    if (new_frequency < 0.01f || new_frequency > 20.0f) { // check boundaries
+        ESP_LOGE(TAG, "LFO frequency must be between 0.01 and 20.0 Hz. (line %d)", __LINE__); //check error message
         return ESP_ERR_INVALID_ARG;
     }
     myDelay->LFO_handle->frequency_target = new_frequency;
@@ -180,14 +199,14 @@ esp_err_t myDelay_set_LFO_waveform(audio_element_handle_t self, int new_waveform
     return ESP_OK;
 }
 
-esp_err_t myDelay_set_LFO_mod_amount(audio_element_handle_t self, float new_mod_amount) {
+esp_err_t myDelay_set_LFO_mod_amount(audio_element_handle_t self, float new_mod_amount) { // STEP 0.001 (in sec)
     myDelay_t *myDelay = (myDelay_t *)audio_element_getdata(self);
     if (new_mod_amount < 0.001f || new_mod_amount > 1.0f) { // check boundaries
         ESP_LOGE(TAG, "LFO modulation amount must be between 0.001 and 1. (line %d)", __LINE__); //check error message
         return ESP_ERR_INVALID_ARG;
     }
     myDelay->LFO_handle->mod_amount_target = new_mod_amount;
-    ESP_LOGI(TAG, "LFO modulation amount set to %.4f", new_mod_amount);
+    ESP_LOGI(TAG, "LFO modulation amount set to %.3f", new_mod_amount);
     return ESP_OK;
 }
 
@@ -210,13 +229,12 @@ esp_err_t LFO_prepare_to_play(LFO_t *LFO, audio_element_handle_t my_d)
 {
     myDelay_t *myDelay = (myDelay_t *)audio_element_getdata(my_d);
     LFO->samplerate = myDelay->samplerate;
-    LFO->channel = 1; // LFO is always mono
     LFO->current_phase = 0.0f; 
     LFO->sampling_period = 1.0f / (float)LFO->samplerate;
     LFO->frequency = 1.0f; //custom
     LFO->waveform = 1;  //custom: triangle wave
     LFO->mod_amount = 0.01f; //custom: modulation amount
-    LFO->alpha = 1.0f - expf(-1.0f/(0.3f * (float)myDelay->samplerate)); //custom da cancellare
+    LFO->alpha = 1.0f - expf(-1.0f/(0.3f * (float)myDelay->samplerate)); //custom 
     LFO->frequency_target = LFO->frequency; //custom
     LFO->mod_amount_target = LFO->mod_amount; //custom
     LFO->debugCount = 0; //DEBUG DA CANCELLARE
@@ -242,12 +260,12 @@ float LFO_get_next_sample(LFO_t *LFO)
         case 1: // Triangle wave
             sample = 4.0f * fabsf(LFO->current_phase - 0.5f) - 1.0f; //check
             break;
-        case 2: // Square wave
-            sample = (LFO->current_phase >= 0.5f) ? 1.0f : -1.0f;
-            break;
-        case 3: // Sawtooth wave (rising)
-            sample = 2.0f * LFO->current_phase - 1.0f; //check
-            break;
+        // case 2: // Square wave
+        //     sample = (LFO->current_phase >= 0.5f) ? 1.0f : -1.0f;
+        //     break;
+        // case 3: // Sawtooth wave (rising)
+        //     sample = 2.0f * LFO->current_phase - 1.0f; //check
+        //     break;
         default:
             sample = 0.0f; // Default to silence for unknown waveform types
             break;
@@ -348,6 +366,20 @@ static esp_err_t myDelay_open(audio_element_handle_t self)
     myDelay->dw_ratio_target = myDelay->dw_ratio; //custom
     myDelay->alpha = 1.0f - expf(-1.0f/(0.3f * (float)myDelay->samplerate)); //custom da cancellare
     ESP_LOGI(TAG, "Smoothing alpha: %.6f", myDelay->alpha);
+    //test
+    // float omega = 2.0f * M_PI * (3.0f / myDelay->samplerate); //custom
+    // float alpha = sinf(omega) / (2.0f * 0.5f); //custom
+    // float D = 1.0f + alpha; //custom
+    // float D_recip = 1.0f / D; //custom
+    // myDelay->a1 = (-2.0f * cosf(omega)) * D_recip; //custom
+    // myDelay->a2 = (1.0f - alpha) * D_recip; //custom
+    // myDelay->b0 = (1.0f - cosf(omega)) * 0.5f * D_recip; //custom
+    // myDelay->b1 = (1.0f - cosf(omega)) * D_recip; //custom
+    // myDelay->b2 = myDelay->b0; //custom
+    // myDelay->w = 0.0f; //custom
+    // myDelay->w1 = 0.0f; //custom
+    // myDelay->w2 = 0.0f; //custom
+    //test
     myDelay->debug = 0; //custom da cancellare
     myDelay->max = 0.0f; //custom da cancellare
     myDelay->min = 0.0f; //custom da cancellare
@@ -415,8 +447,8 @@ if (r_size > 0) {
         myDelay->at_eof = 1;
     }
     myDelay->byte_num += r_size;
-    if (r_size % (myDelay->channel * sizeof(int16_t)) != 0) { //CHECKKKKKKKKK
-        ESP_LOGW(TAG, "Input data size %d is not aligned with channel number %d and sample size %d.", r_size, myDelay->channel, sizeof(int16_t));
+    if (r_size % (myDelay->channel * sizeof(int16_t)) != 0) { 
+        ESP_LOGW(TAG, "Input data size %d is not aligned with channel number %d and sample size %d.", r_size, myDelay->channel, sizeof(int16_t)); //check error message
     }
 
     float num_samples = (float)r_size / (float)sizeof(int16_t); //custom

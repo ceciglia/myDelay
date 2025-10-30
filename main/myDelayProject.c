@@ -132,31 +132,34 @@ void app_main(void)
             continue;
         }
 
-        // peripherals management
+        // buttons management
         if ((msg.source_type == PERIPH_ID_TOUCH || msg.source_type == PERIPH_ID_BUTTON || msg.source_type == PERIPH_ID_ADC_BTN)
             && (msg.cmd == PERIPH_TOUCH_TAP || msg.cmd == PERIPH_BUTTON_PRESSED || msg.cmd == PERIPH_ADC_BUTTON_PRESSED)) {
             if ((int) msg.data == get_input_mode_id()) { // key 1
-                base_dt += 0.1f;
-                base_dt = base_dt > MYDELAY_MAX_DELAY_TIME ? 0.001f : base_dt;
+                base_dt += 0.5f;
+                base_dt = roundf(base_dt * 10000.0f) / 10000.0f;
+                base_dt = base_dt > MYDELAY_MAX_DELAY_TIME ? 0.0001f : base_dt;
                 myDelay_set_base_dt_target(delay, base_dt); // example
                 ESP_LOGI(TAG, "[ * ] Changed base delay time target to %.4f seconds", base_dt);
             } else if ((int) msg.data == get_input_rec_id()) { // key 2
-                lfo_freq += 0.1f;
-                lfo_freq = lfo_freq > 10.0f ? 0.01f : lfo_freq;
+                lfo_freq += 0.5f;
+                lfo_freq = roundf(lfo_freq * 100.0f) / 100.0f;
+                lfo_freq = lfo_freq > 20.0f ? 0.01f : lfo_freq;
                 myDelay_set_LFO_frequency(delay, lfo_freq); // example
-                ESP_LOGI(TAG, "[ * ] Changed LFO frequency to %.2f Hz", lfo_freq);
+                ESP_LOGI(TAG, "[ * ] Changed LFO frequency to %.3f Hz", lfo_freq);
             } else if ((int) msg.data == get_input_play_id()) { // key 3
-                ESP_LOGI(TAG, "[ * ] [Play] touch tap event");
                 wf = (wf + 1) % 2;
                 myDelay_set_LFO_waveform(delay, wf); // example
                 ESP_LOGI(TAG, "[ * ] Changed LFO waveform to %d", wf);
             } else if ((int) msg.data == get_input_set_id()) { // key 4
                 fb += 0.05f;
-                fb = fb > 0.95f ? 0.0f : fb;
+                fb = roundf(fb * 1000.0f) / 1000.0f;
+                fb = fb > 0.999f ? 0.0f : fb;
                 myDelay_set_feedback(delay, fb); // example
-                ESP_LOGI(TAG, "[ * ] Changed feedback to %.2f", fb);
+                ESP_LOGI(TAG, "[ * ] Changed feedback to %.3f", fb);
             } else if ((int) msg.data == get_input_voldown_id()) { // key 5
                 dw += 0.1f;
+                dw = roundf(dw * 10.0f) / 10.0f;
                 dw = dw > 1.0f ? 0.0f : dw;
                 myDelay_set_dw_ratio(delay, dw); // example
                 ESP_LOGI(TAG, "[ * ] Changed dry/wet ratio to %.2f", dw);
@@ -166,7 +169,7 @@ void app_main(void)
                 ESP_LOGI(TAG, "[ * ] Volume set to %d %%", player_volume);
             } 
         }
-        /// end of peripherals management
+        /// end of buttons management
 
         /* Stop when the last pipeline element (i2s_stream_writer in this case) receives stop event */
         if (msg.source_type == AUDIO_ELEMENT_TYPE_ELEMENT && msg.source == (void *) i2s_stream_writer
