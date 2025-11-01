@@ -1,26 +1,19 @@
-﻿# Audio Passthrough
+﻿# My Delay
+## What is it
+My delay implements a real-time modulated delay. It implements chorus/flanger/vibrato effect?????? due to its modulating capabilities. It works at 16 bit per sample to obtain an analogue feeling.
 
-- [中文版本](./README_CN.md)
-- Regular Example: ![alt text](../../../docs/_static/level_regular.png "Regular Example")
+## Architecture and operating contexts
+My delay is a DSP component written in C, designed to function as an audio element within the real-time audio pipeline of the ESP-ADF environment optimized for microcontroller execution.
+It works at a sample rate of 48kHz, 16 bit per sample and it operates on fixed blocks of 512 bytes (BUF SIZE), therefore 256 samples (2 bytes per sample). All core DSP calculations (including LFO generation, interpolation and parameter smoothing) are performed using floating-point precision that is then recasted in int16_t. All the project revolves arount the my_Delay struct which defines all the components necessary to the delay to function.
 
-
-## Example Brief
-
-This example demonstrates how to pass through the audio received from the `aux_in` port to the earphone or speaker ports.
-
-Application scenarios of audio passthrough:
-
-- Verify the integrity of the audio pipeline from beginning to end when using the new hardware design.
-- Check the consistency of the left and right channels through the audio path.
-- Measure THD+N together with audio test equipment for production line testing or performance evaluation.
-
-The passthrough pipeline of this example is as follows:
+As I mentioned before my delay is a member of the audio pipeline defined as follows:
 
 ```
 
-[codec_chip] ---> i2s_stream_reader ---> i2s_stream_writer ---> [codec_chip]
+[codec_chip] ---> i2s_stream_reader ---> delay ---> i2s_stream_writer ---> [codec_chip]
 
 ```
+where i2s_stream_reader and i2s_stream_writer are audio elements responsible for acquiring of audio data and then sending the data out after processing. The i2s_stream_reader reads the audio data in input, the i2s_stream_writer writes it to the output.
 
 
 ## Environment Setup
