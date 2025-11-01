@@ -43,16 +43,6 @@ typedef struct myDelay {
     float dw_ratio; //custom
     float dw_ratio_target; //custom
     float alpha; //custom 
-    //test
-    float w; //custom da cancellare
-    float a1; //custom da cancellare
-    float a2; //custom da cancellare
-    float b0; //custom da cancellare
-    float b1; //custom da cancellare
-    float b2; //custom da cancellare
-    float w1; //custom da cancellare
-    float w2; //custom da cancellare
-    //test
     int debug; //custom da cancellare
     float max; //custom da cancellare
     float min; //custom da cancellare
@@ -118,16 +108,6 @@ esp_err_t myDelay_compute_smoothed_values(myDelay_t *myDelay) {
     return ESP_OK;
 }
 
-// esp_err_t myDelay_compute_smoothed_values(myDelay_t *myDelay) {
-//     // w[n] = x[n] - a1 * w[n-1] - a2 * w[n-2]
-//     // y[n] = b0 * w[n] + b1 * w[n-1] + b2 * w[n-2]
-//     myDelay->w = myDelay->base_dt_target - myDelay->a1 * myDelay->w1 - myDelay->a2 * myDelay->w2;
-//     myDelay->base_dt = myDelay->b0 *myDelay->w + myDelay->b1 * myDelay->w1 + myDelay->b2 * myDelay->w2;
-//     myDelay->w2 = myDelay->w1;
-//     myDelay->w1 = myDelay->w;
-//     return ESP_OK;
-// }
-
 esp_err_t myDelay_set_base_dt_target(audio_element_handle_t self, float new_base_dt_target) { // STEP 0.0001
     myDelay_t *myDelay = (myDelay_t *)audio_element_getdata(self); 
     if (new_base_dt_target < 0.0001f || new_base_dt_target > MYDELAY_MAX_DELAY_TIME) { 
@@ -152,12 +132,12 @@ esp_err_t myDelay_set_feedback(audio_element_handle_t self, float new_feedback) 
 
 esp_err_t myDelay_set_dw_ratio(audio_element_handle_t self, float new_dw_ratio) {
     myDelay_t *myDelay = (myDelay_t *)audio_element_getdata(self);
-    if (new_dw_ratio < 0.0f || new_dw_ratio > 1.0f) {
+    if (new_dw_ratio < 0.000f || new_dw_ratio > 1.000f) {
         ESP_LOGE(TAG, "Dry/Wet ratio must be between 0.0 and 1.0. (line %d)", __LINE__);
         return ESP_ERR_INVALID_ARG;
     }
     myDelay->dw_ratio_target = new_dw_ratio;
-    ESP_LOGI(TAG, "Dry/Wet ratio set to %.2f", new_dw_ratio);
+    ESP_LOGI(TAG, "Dry/Wet ratio set to %.4f", new_dw_ratio);
     return ESP_OK;
 }
 
@@ -179,8 +159,8 @@ float myDelay_get_dw_ratio(audio_element_handle_t self) {
 // LFO
 esp_err_t myDelay_set_LFO_frequency(audio_element_handle_t self, float new_frequency) { // STEP 0.01
     myDelay_t *myDelay = (myDelay_t *)audio_element_getdata(self);
-    if (new_frequency < 0.01f || new_frequency > 20.0f) { // check boundaries
-        ESP_LOGE(TAG, "LFO frequency must be between 0.01 and 20.0 Hz. (line %d)", __LINE__); //check error message
+    if (new_frequency < 0.01f || new_frequency > 20.00f) { 
+        ESP_LOGE(TAG, "LFO frequency must be between 0.01 and 20.0 Hz. (line %d)", __LINE__); 
         return ESP_ERR_INVALID_ARG;
     }
     myDelay->LFO_handle->frequency_target = new_frequency;
@@ -201,8 +181,8 @@ esp_err_t myDelay_set_LFO_waveform(audio_element_handle_t self, int new_waveform
 
 esp_err_t myDelay_set_LFO_mod_amount(audio_element_handle_t self, float new_mod_amount) { // STEP 0.001 (in sec)
     myDelay_t *myDelay = (myDelay_t *)audio_element_getdata(self);
-    if (new_mod_amount < 0.001f || new_mod_amount > 1.0f) { // check boundaries
-        ESP_LOGE(TAG, "LFO modulation amount must be between 0.001 and 1. (line %d)", __LINE__); //check error message
+    if (new_mod_amount < 0.001f || new_mod_amount > 1.000f) { 
+        ESP_LOGE(TAG, "LFO modulation amount must be between 0.001 and 1 (seconds). (line %d)", __LINE__); 
         return ESP_ERR_INVALID_ARG;
     }
     myDelay->LFO_handle->mod_amount_target = new_mod_amount;
@@ -366,20 +346,6 @@ static esp_err_t myDelay_open(audio_element_handle_t self)
     myDelay->dw_ratio_target = myDelay->dw_ratio; //custom
     myDelay->alpha = 1.0f - expf(-1.0f/(0.3f * (float)myDelay->samplerate)); //custom da cancellare
     ESP_LOGI(TAG, "Smoothing alpha: %.6f", myDelay->alpha);
-    //test
-    // float omega = 2.0f * M_PI * (3.0f / myDelay->samplerate); //custom
-    // float alpha = sinf(omega) / (2.0f * 0.5f); //custom
-    // float D = 1.0f + alpha; //custom
-    // float D_recip = 1.0f / D; //custom
-    // myDelay->a1 = (-2.0f * cosf(omega)) * D_recip; //custom
-    // myDelay->a2 = (1.0f - alpha) * D_recip; //custom
-    // myDelay->b0 = (1.0f - cosf(omega)) * 0.5f * D_recip; //custom
-    // myDelay->b1 = (1.0f - cosf(omega)) * D_recip; //custom
-    // myDelay->b2 = myDelay->b0; //custom
-    // myDelay->w = 0.0f; //custom
-    // myDelay->w1 = 0.0f; //custom
-    // myDelay->w2 = 0.0f; //custom
-    //test
     myDelay->debug = 0; //custom da cancellare
     myDelay->max = 0.0f; //custom da cancellare
     myDelay->min = 0.0f; //custom da cancellare
@@ -512,7 +478,8 @@ if (r_size > 0) {
             p_delay_memory_16[myDelay->write_index + ch] = (int16_t)(delayed_sample * 32767.0f);
 
             // dry wet mix
-            float output_sample = sample_value * sqrtf(1.0f - myDelay->dw_ratio) + input_sample * sqrtf(myDelay->dw_ratio);
+            // float output_sample = sample_value * sqrtf(1.0f - myDelay->dw_ratio) + input_sample * sqrtf(myDelay->dw_ratio);
+            float output_sample = (roundf(myDelay->dw_ratio * 1000.0f) / 1000.0f == 1.0f) || (roundf(myDelay->dw_ratio * 1000.0f) / 1000.0f == 0.0f) ? (roundf(myDelay->dw_ratio * 1000.0f) / 1000.0f == 1.0f ? input_sample : sample_value) : sample_value * sqrtf(1.0f - myDelay->dw_ratio) + input_sample * sqrtf(myDelay->dw_ratio); //bypass when dw_ratio is 1.0
             
             // DEBUG
             // if (output_sample > myDelay->max) {
@@ -536,8 +503,7 @@ if (r_size > 0) {
                 ESP_LOGI(TAG, "myDelay current_dt: %.3f", current_dt);
                 ESP_LOGI(TAG, "my Delay base dt: %.3f", myDelay->base_dt);
                 ESP_LOGI(TAG, "DRY WET RATIO: %.3f", myDelay->dw_ratio);
-                
-
+                ESP_LOGI(TAG, "SQRT DW: sqrtf(1.0f - myDelay->dw_ratio) : %.4f e sqrtf(myDelay->dw_ratio) : %.4f", sqrt(1.0f - myDelay->dw_ratio), sqrt(myDelay->dw_ratio));
             //     ESP_LOGI(TAG, "myDelay MAX output_sample: %.3f", myDelay->max); 
             //     ESP_LOGI(TAG, "myDelay MIN output_sample: %.3f", myDelay->min); 
             //     ESP_LOGI(TAG, "p_buf_16[%d]: %d", i, p_buf_16[i]);

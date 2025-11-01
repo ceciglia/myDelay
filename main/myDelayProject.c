@@ -32,6 +32,7 @@ void app_main(void)
         .bits = AUDIO_HAL_BIT_LENGTH_16BITS,
     };     
 
+    // audio_hal_set_volume(board_handle->audio_hal, 80);
     audio_hal_codec_iface_config(board_handle->audio_hal, AUDIO_HAL_CODEC_MODE_BOTH, &iface);
     audio_hal_ctrl_codec(board_handle->audio_hal, AUDIO_HAL_CODEC_MODE_BOTH, AUDIO_HAL_CTRL_START);
     audio_hal_enable_pa(board_handle->audio_hal, true); 
@@ -121,6 +122,7 @@ void app_main(void)
     float fb = myDelay_get_feedback(delay);
     float dw = myDelay_get_dw_ratio(delay);
     float lfo_freq = myDelay_get_LFO_frequency(delay);
+    float lfo_mod_amount = myDelay_get_LFO_mod_amount(delay);
     // end testing
 
     ESP_LOGI(TAG, "[ 6 ] Listen for all pipeline events");
@@ -142,31 +144,36 @@ void app_main(void)
                 myDelay_set_base_dt_target(delay, base_dt); // example
                 ESP_LOGI(TAG, "[ * ] Changed base delay time target to %.4f seconds", base_dt);
             } else if ((int) msg.data == get_input_rec_id()) { // key 2
-                lfo_freq += 0.5f;
-                lfo_freq = roundf(lfo_freq * 100.0f) / 100.0f;
-                lfo_freq = lfo_freq > 20.0f ? 0.01f : lfo_freq;
-                myDelay_set_LFO_frequency(delay, lfo_freq); // example
-                ESP_LOGI(TAG, "[ * ] Changed LFO frequency to %.3f Hz", lfo_freq);
-            } else if ((int) msg.data == get_input_play_id()) { // key 3
-                wf = (wf + 1) % 2;
-                myDelay_set_LFO_waveform(delay, wf); // example
-                ESP_LOGI(TAG, "[ * ] Changed LFO waveform to %d", wf);
-            } else if ((int) msg.data == get_input_set_id()) { // key 4
                 fb += 0.05f;
                 fb = roundf(fb * 1000.0f) / 1000.0f;
                 fb = fb > 0.999f ? 0.0f : fb;
                 myDelay_set_feedback(delay, fb); // example
                 ESP_LOGI(TAG, "[ * ] Changed feedback to %.3f", fb);
+            } else if ((int) msg.data == get_input_play_id()) { // key 3
+                wf = (wf + 1) % 2;
+                myDelay_set_LFO_waveform(delay, wf); // example
+                ESP_LOGI(TAG, "[ * ] Changed LFO waveform to %d", wf);
+            } else if ((int) msg.data == get_input_set_id()) { // key 4
+                lfo_freq += 0.5f;
+                lfo_freq = roundf(lfo_freq * 100.0f) / 100.0f;
+                lfo_freq = lfo_freq > 20.0f ? 0.01f : lfo_freq;
+                myDelay_set_LFO_frequency(delay, lfo_freq); // example
+                ESP_LOGI(TAG, "[ * ] Changed LFO frequency to %.3f Hz", lfo_freq);
             } else if ((int) msg.data == get_input_voldown_id()) { // key 5
+                lfo_mod_amount += 0.01f;
+                lfo_mod_amount = roundf(lfo_mod_amount * 1000.0f) / 1000.0f;
+                lfo_mod_amount = lfo_mod_amount > 1.0f ? 0.001f : lfo_mod_amount;
+                myDelay_set_LFO_mod_amount(delay, lfo_mod_amount); // example
+                ESP_LOGI(TAG, "[ * ] Changed LFO modulation amount to %.3f", lfo_mod_amount);
+            } else if ((int) msg.data == get_input_volup_id()) { // key 6
+                // player_volume = (player_volume + 10) % 100;
+                // audio_hal_set_volume(board_handle->audio_hal, player_volume);
+                // ESP_LOGI(TAG, "[ * ] Volume set to %d %%", player_volume);
                 dw += 0.1f;
-                dw = roundf(dw * 10.0f) / 10.0f;
+                dw = roundf(dw * 1000.0f) / 1000.0f;
                 dw = dw > 1.0f ? 0.0f : dw;
                 myDelay_set_dw_ratio(delay, dw); // example
-                ESP_LOGI(TAG, "[ * ] Changed dry/wet ratio to %.2f", dw);
-            } else if ((int) msg.data == get_input_volup_id()) { // key 6
-                player_volume = (player_volume + 10) % 100;
-                audio_hal_set_volume(board_handle->audio_hal, player_volume);
-                ESP_LOGI(TAG, "[ * ] Volume set to %d %%", player_volume);
+                ESP_LOGI(TAG, "[ * ] Changed dry/wet ratio to %.4f", dw);
             } 
         }
         /// end of buttons management
