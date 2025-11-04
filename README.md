@@ -1,10 +1,10 @@
 ﻿# My Delay
 ## In brief
-My delay implements a real-time modulated delay. It produces chorus/flanger/vibrato effect?????? due to its modulating capabilities. It works at 16 bit per sample to obtain an analogue feeling.
+My delay produces classic chorus/flanger/vibrato effects?????? through real-time modulated fractional delay. It handles audio at 48Hz and 16 bit per sample to obtain an analogue-like sonic character/feeling.
 
 ## Technical overview and architecture
 My delay is a DSP component written in C, designed to function as an audio element within the real-time audio pipeline of the ESP-ADF environment optimized for microcontroller execution.
-It works at a sample rate of 48kHz, 16 bit per sample and it operates on fixed blocks of 512 bytes (BUF SIZE), therefore 256 samples (2 bytes per sample). All core DSP calculations (including LFO generation, interpolation and parameter smoothing) are performed using floating-point precision that is then recasted in int16_t. All the project revolves arount the my_Delay struct which defines all the components necessary to the delay to function.
+It works at a sample rate of 48kHz, 16 bit per sample and it operates on fixed blocks of 512 bytes (BUF SIZE), therefore 256 samples (2 bytes per sample). All core DSP calculations (including LFO generation, interpolation and parameter smoothing) are performed using floating-point precision that is then recasted in int16_t. ????????All the project revolves arount the my_Delay struct which defines all the components necessary to the delay to function.??????????
 
 As I mentioned before my delay is a member of the audio pipeline defined as follows:
 
@@ -15,22 +15,27 @@ As I mentioned before my delay is a member of the audio pipeline defined as foll
 ```
 where i2s_stream_reader and i2s_stream_writer are audio elements responsible for acquiring of audio data and then sending the data out after processing. The i2s_stream_reader reads the audio data in input, the i2s_stream_writer writes it to the output.
 
+### My delay design
+The following diagram illustrates the architecture of the delay module, showing the relations between the DSP functional blocks.
 
-## Core DSP functionalities
+![Diagramma a blocchi del modulo di Delay](images/mydelaylightandborder20.drawio.svg)
+
+
+## DSP overview
 
 ### Fractional delay
-In order to obtain a chorus/flanger effect the delay through precise control of the delay time. The delay line uses a circular buffer (delay_memory) and two heads: the write head (write_index) that writes into the buffer and the read head (read_index) that reads the buffer data after x delay time (x * Ts samples). Because the time modulation forces the read index to _continuously_ (i.e. fractionally) move between integer indexes, interpolation must be used to calculate the true audio value. The interpolation employed ??? is all pass interpolation, that ensures no frequency distortion (flat magnitude response) and it is defined as follows:
+In order to obtain a chorus/flanger effect the delay through precise control of the delay time. The delay line uses a circular buffer (delay_memory) and two heads: the write head (write_index) that writes into the buffer and the read head (read_index) that reads the buffer data after x delay time ($x \cdot T_{s}$ samples). Because the time modulation forces the read index to _continuously_ (i.e. fractionally) move between integer indexes, interpolation must be used to calculate the true audio value. The interpolation employed ??? is all pass interpolation, that ensures no frequency distortion (flat magnitude response) and it is defined as follows:
 $$
 y[n] = a_{1}(x[n] – y[n-1]) + x[n-1]
 $$
 
 ### Modulation
-The LFO Engine (LFO_t) provides the modulation source. It supports two waveforms (sine and square) and is responsible for producing a continuous, low-frequency signal. The LFO's phase (current_phase) is managed with a wrap-around logic (from 0 to 1), ensuring the modulation cycle is perfectly smooth and continuous.
+The LFO Engine (LFO_t) provides the modulation source. It supports two waveforms (sine and square) and is responsible for producing a continuous, low-frequency signal between $0.01$ and $20$ Hz. The LFO's phase (current_phase) is managed with a wrap-around logic (from $0$ to $1$), ensuring the modulation cycle is perfectly smooth and continuous.
 
 ### Parameter smoothing and control
 The project includes the implementation of parameter smoothing to prevent zipper noise (a rapid, audible stepping effect) when controls are adjusted. My delay addresses this by using a target-based structure for all critical parameters. Every parameter that can be changed by the user (e.g., base_dt, feedback, dw_ratio, LFO->frequency) has a corresponding **_target** field. The parameter value is gradually moved toward the target value over several samples. 
 
-The smoothing function is a I order low-pass filter (LPF): 
+The smoothing function is a $I$ order low-pass filter (LPF): 
 
 $$
 y[i] = y[i-1] + alpha \cdot (x[i]-y[i-1])
@@ -42,140 +47,58 @@ alpha = 1 - e^{\frac{-1}{(0.3 \cdot F_{s})}};
 $$
 
 
-## Environment setup
-The project has been developed on VS Code (Visual Studio Code) using ESP-IDF and the ESP-ADF extention on VS Code following this [guide lines](https://docs.espressif.com/projects/esp-adf/en/latest/get-started/) on the ESP website.
+## Environment configuration
+The project has been developed for the ESP32-A1S audio kit on VS Code (Visual Studio Code) using ESP-IDF and the ESP-ADF extention. The configuration has been completed following these [guide lines](https://docs.espressif.com/projects/esp-adf/en/latest/get-started/) on the ESPRESSIF website.
 
 ### ESP-ADF
+Espressif Systems Advanced Development Framework (ESP-ADF) is the official Advanced Development Framework for the ESP32, ESP32-S2, ESP32-C3, ESP32-C6, ESP32-S3, and ESP32-P4 SoCs. 
 
-### My board
+### ESP32-A1S Audio Kit
+The project runs on the `ESP32-A1S Audio Kit v2.2 A436` development board. The board setup files used are available in this [repository](https://github.com/trombik/esp-adf-component-ai-thinker-esp32-a1s?tab=readme-ov-file).
 
 ### Codec setup 
+The latest versions of the ESP32-A1S Audio Kit has the ES8388 codec on board. In order to meet the specifications of the delay design some registers default values has been changed. Specifically the es8388.c file at this path (C:\Users\cecix\esp\esp-adf\components\audio_hal\driver\es8388\es8388.c) has been modified: 
+```c
+esp_err_t es8388_init(audio_hal_codec_config_t *cfg)
+{
+    // other code
+    
+    // res |= es_write_reg(ES8388_ADDR, ES8388_DACCONTROL16, 0x09);  // 0x00 audio on LIN1&RIN1,  0x09 LIN2&RIN2
+    // res |= es_write_reg(ES8388_ADDR, ES8388_DACCONTROL7, 0x00);  
 
+    // other code
 
+    // set also L2 and R2 volume to 0dB (0x1E) to hear from the headphones output
+    res |= es_write_reg(ES8388_ADDR, ES8388_DACCONTROL26, 0x1E); 
+    res |= es_write_reg(ES8388_ADDR, ES8388_DACCONTROL27, 0x1E);
 
+    // other code
 
-This example supports IDF release/v5.0 and later branches. By default, it runs on ADF's built-in branch `$ADF_PATH/esp-idf`.
+    // // set differential input select to LINPUT2-RINPUT2
+    // res |= es_write_reg(ES8388_ADDR, ES8388_ADCCONTROL3, 0x82);
 
-### Configuration
+    // // set new min (-12dB) and max (35.5dB) PGA gain
+    // res |= es_write_reg(ES8388_ADDR, ES8388_ADCCONTROL10, 0x38);
 
-Prepare an aux audio cable to connect the `AUX_IN` of the development board and the `Line-Out` of the audio output side.
+    // 16 Bits length, I2S serial audio data format and I2S channels swap by adjusting the L/R polarity settings in the codec driver
+    res |= es_write_reg(ES8388_ADDR, ES8388_ADCCONTROL4, 0x2c);
 
-The default board for this example is `ESP32-Lyrat V4.3`, which is the only supported board so far.
+    // // set Master mode ADC MCLK to sampling frequency ratio to 128 
+    // res |= es_write_reg(ES8388_ADDR, ES8388_ADCCONTROL5, 0x00); 
 
+    // set mic left and right channel PGA gain to 0dB (it was set to 0xbb, above +24dB)
+    res |= es_write_reg(ES8388_ADDR, ES8388_ADCCONTROL1, 0x00);  // MIC Left and Right channel PGA gain 
 
-### Build and Flash
-Build the project and flash it to the board, then run monitor tool to view serial output (replace `PORT` with your board's serial port name):
-
+    // other code
+}
 ```
-idf.py -p PORT flash monitor
-```
 
-To exit the serial monitor, type ``Ctrl-]``.
-
-See [ESP-IDF Programming Guide](https://docs.espressif.com/projects/esp-idf/en/release-v5.3/esp32/index.html) for full steps to configure and build an ESP-IDF project.
 
 ## How to Use the Example
 
 ### Example Functionality
-
-- The example starts running and is waiting for input signal from `AUX_IN` port. This port is connected to the `Line-Out` port of the PC with an aux cable. Below is the log.
-
 ```c
-rst:0x1 (POWERON_RESET),boot:0x1f (SPI_FAST_FLASH_BOOT)
-configsip: 0, SPIWP:0xee
-clk_drv:0x00,q_drv:0x00,d_drv:0x00,cs0_drv:0x00,hd_drv:0x00,wp_drv:0x00
-mode:DIO, clock div:2
-load:0x3fff0030,len:7204
-load:0x40078000,len:13212
-load:0x40080400,len:4568
-0x40080400: _init at ??:?
-
-entry 0x400806f4
-I (27) boot: ESP-IDF v4.2.2-1-g379ca2123 2nd stage bootloader
-I (27) boot: compile time 11:27:17
-I (27) boot: chip revision: 3
-I (31) boot_comm: chip revision: 3, min. bootloader chip revision: 0
-I (38) boot.esp32: SPI Speed      : 40MHz
-I (43) boot.esp32: SPI Mode       : DIO
-I (47) boot.esp32: SPI Flash Size : 2MB
-I (52) boot: Enabling RNG early entropy source...
-I (57) boot: Partition Table:
-I (61) boot: ## Label            Usage          Type ST Offset   Length
-I (68) boot:  0 nvs              WiFi data        01 02 00009000 00006000
-I (76) boot:  1 phy_init         RF data          01 01 0000f000 00001000
-I (83) boot:  2 factory          factory app      00 00 00010000 00100000
-I (91) boot: End of partition table
-I (95) boot_comm: chip revision: 3, min. application chip revision: 0
-I (102) esp_image: segment 0: paddr=0x00010020 vaddr=0x3f400020 size=0x0a194 ( 41364) map
-I (127) esp_image: segment 1: paddr=0x0001a1bc vaddr=0x3ffb0000 size=0x02110 (  8464) load
-I (131) esp_image: segment 2: paddr=0x0001c2d4 vaddr=0x40080000 size=0x03d44 ( 15684) load
-0x40080000: _WindowOverflow4 at /hengyongchao/esp-idfs/esp-idf-v4.2.2-psram/components/freertos/xtensa/xtensa_vectors.S:1730
-
-I (140) esp_image: segment 3: paddr=0x00020020 vaddr=0x400d0020 size=0x1f2ac (127660) map
-0x400d0020: _stext at ??:?
-
-I (191) esp_image: segment 4: paddr=0x0003f2d4 vaddr=0x40083d44 size=0x081a0 ( 33184) load
-0x40083d44: i2c_master_cmd_begin_static at /hengyongchao/esp-idfs/esp-idf-v4.2.2-psram/components/driver/i2c.c:1014
-
-I (212) boot: Loaded app from partition at offset 0x10000
-I (213) boot: Disabling RNG early entropy source...
-I (213) cpu_start: Pro cpu up.
-I (217) cpu_start: Application information:
-I (221) cpu_start: Project name:     passthru
-I (226) cpu_start: App version:      v2.2-216-gbb375dee-dirty
-I (233) cpu_start: Compile time:     Nov  8 2021 11:27:11
-I (239) cpu_start: ELF file SHA256:  26639813b619eb6a...
-I (245) cpu_start: ESP-IDF:          v4.2.2-1-g379ca2123
-I (251) cpu_start: Starting app cpu, entry point is 0x40081704
-0x40081704: call_start_cpu1 at /hengyongchao/esp-idfs/esp-idf-v4.2.2-psram/components/esp32/cpu_start.c:287
-
-I (0) cpu_start: App cpu up.
-I (261) heap_init: Initializing. RAM available for dynamic allocation:
-I (268) heap_init: At 3FFAE6E0 len 00001920 (6 KiB): DRAM
-I (274) heap_init: At 3FFB2988 len 0002D678 (181 KiB): DRAM
-I (281) heap_init: At 3FFE0440 len 00003AE0 (14 KiB): D/IRAM
-I (287) heap_init: At 3FFE4350 len 0001BCB0 (111 KiB): D/IRAM
-I (293) heap_init: At 4008BEE4 len 0001411C (80 KiB): IRAM
-I (299) cpu_start: Pro cpu start user code
-I (318) spi_flash: detected chip: gd
-I (318) spi_flash: flash io: dio
-W (318) spi_flash: Detected size(8192k) larger than the size in the binary image header(2048k). Using the size in the binary image header.
-I (328) cpu_start: Starting scheduler on PRO CPU.
-I (0) cpu_start: Starting scheduler on APP CPU.
-I (339) PASSTHRU: [ 1 ] Start codec chip
-I (349) gpio: GPIO[19]| InputEn: 1| OutputEn: 0| OpenDrain: 0| Pullup: 1| Pulldown: 0| Intr:3
-I (369) gpio: GPIO[21]| InputEn: 0| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0
-I (369) ES8388_DRIVER: init,out:02, in:00
-I (379) AUDIO_HAL: Codec mode is 4, Ctrl:1
-I (379) PASSTHRU: [ 2 ] Create audio pipeline for playback
-I (379) PASSTHRU: [3.1] Create i2s stream to write data to codec chip
-I (389) I2S: DMA Malloc info, datalen=blocksize=1200, dma_buf_count=3
-I (399) I2S: DMA Malloc info, datalen=blocksize=1200, dma_buf_count=3
-I (429) I2S: APLL: Req RATE: 44100, real rate: 44099.988, BITS: 16, CLKM: 1, BCK_M: 8, MCLK: 11289597.000, SCLK: 1411199.625000, diva: 1, divb: 0
-I (429) LYRAT_V4_3: I2S0, MCLK output by GPIO0
-I (429) PASSTHRU: [3.2] Create i2s stream to read data from codec chip
-W (439) I2S: I2S driver already installed
-I (449) LYRAT_V4_3: I2S0, MCLK output by GPIO0
-I (449) PASSTHRU: [3.3] Register all elements to audio pipeline
-I (459) PASSTHRU: [3.4] Link it together [codec_chip]-->i2s_stream_reader-->i2s_stream_writer-->[codec_chip]
-I (469) AUDIO_PIPELINE: link el->rb, el:0x3ffb881c, tag:i2s_read, rb:0x3ffb8ba0
-I (479) PASSTHRU: [ 4 ] Set up  event listener
-I (479) PASSTHRU: [4.1] Listening event from all elements of pipeline
-I (489) PASSTHRU: [ 5 ] Start audio_pipeline
-I (489) AUDIO_ELEMENT: [i2s_read-0x3ffb881c] Element task created
-I (499) AUDIO_ELEMENT: [i2s_write-0x3ffb8490] Element task created
-I (509) AUDIO_PIPELINE: Func:audio_pipeline_run, Line:359, MEM Total:268604 Bytes
-
-I (519) AUDIO_ELEMENT: [i2s_read] AEL_MSG_CMD_RESUME,state:1
-I (519) I2S_STREAM: AUDIO_STREAM_READER,Rate:44100,ch:2
-I (549) I2S: APLL: Req RATE: 44100, real rate: 44099.988, BITS: 16, CLKM: 1, BCK_M: 8, MCLK: 11289597.000, SCLK: 1411199.625000, diva: 1, divb: 0
-I (549) AUDIO_ELEMENT: [i2s_write] AEL_MSG_CMD_RESUME,state:1
-I (559) I2S_STREAM: AUDIO_STREAM_WRITER
-I (559) AUDIO_PIPELINE: Pipeline started
-I (569) PASSTHRU: [ 6 ] Listen for all pipeline events
-I (9959) gpio: GPIO[21]| InputEn: 0| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0
-W (9959) HEADPHONE: Headphone jack removed
-
+ciao
 ```
 
 
@@ -183,100 +106,7 @@ W (9959) HEADPHONE: Headphone jack removed
 A complete log is as follows:
 
 ```c
-rst:0x1 (POWERON_RESET),boot:0x1f (SPI_FAST_FLASH_BOOT)
-configsip: 0, SPIWP:0xee
-clk_drv:0x00,q_drv:0x00,d_drv:0x00,cs0_drv:0x00,hd_drv:0x00,wp_drv:0x00
-mode:DIO, clock div:2
-load:0x3fff0030,len:7204
-load:0x40078000,len:13212
-load:0x40080400,len:4568
-0x40080400: _init at ??:?
-
-entry 0x400806f4
-I (27) boot: ESP-IDF v4.2.2-1-g379ca2123 2nd stage bootloader
-I (27) boot: compile time 11:27:17
-I (27) boot: chip revision: 3
-I (31) boot_comm: chip revision: 3, min. bootloader chip revision: 0
-I (38) boot.esp32: SPI Speed      : 40MHz
-I (43) boot.esp32: SPI Mode       : DIO
-I (47) boot.esp32: SPI Flash Size : 2MB
-I (52) boot: Enabling RNG early entropy source...
-I (57) boot: Partition Table:
-I (61) boot: ## Label            Usage          Type ST Offset   Length
-I (68) boot:  0 nvs              WiFi data        01 02 00009000 00006000
-I (76) boot:  1 phy_init         RF data          01 01 0000f000 00001000
-I (83) boot:  2 factory          factory app      00 00 00010000 00100000
-I (91) boot: End of partition table
-I (95) boot_comm: chip revision: 3, min. application chip revision: 0
-I (102) esp_image: segment 0: paddr=0x00010020 vaddr=0x3f400020 size=0x0a194 ( 41364) map
-I (127) esp_image: segment 1: paddr=0x0001a1bc vaddr=0x3ffb0000 size=0x02110 (  8464) load
-I (131) esp_image: segment 2: paddr=0x0001c2d4 vaddr=0x40080000 size=0x03d44 ( 15684) load
-0x40080000: _WindowOverflow4 at /hengyongchao/esp-idfs/esp-idf-v4.2.2-psram/components/freertos/xtensa/xtensa_vectors.S:1730
-
-I (140) esp_image: segment 3: paddr=0x00020020 vaddr=0x400d0020 size=0x1f2ac (127660) map
-0x400d0020: _stext at ??:?
-
-I (191) esp_image: segment 4: paddr=0x0003f2d4 vaddr=0x40083d44 size=0x081a0 ( 33184) load
-0x40083d44: i2c_master_cmd_begin_static at /hengyongchao/esp-idfs/esp-idf-v4.2.2-psram/components/driver/i2c.c:1014
-
-I (212) boot: Loaded app from partition at offset 0x10000
-I (213) boot: Disabling RNG early entropy source...
-I (213) cpu_start: Pro cpu up.
-I (217) cpu_start: Application information:
-I (221) cpu_start: Project name:     passthru
-I (226) cpu_start: App version:      v2.2-216-gbb375dee-dirty
-I (233) cpu_start: Compile time:     Nov  8 2021 11:27:11
-I (239) cpu_start: ELF file SHA256:  26639813b619eb6a...
-I (245) cpu_start: ESP-IDF:          v4.2.2-1-g379ca2123
-I (251) cpu_start: Starting app cpu, entry point is 0x40081704
-0x40081704: call_start_cpu1 at /hengyongchao/esp-idfs/esp-idf-v4.2.2-psram/components/esp32/cpu_start.c:287
-
-I (0) cpu_start: App cpu up.
-I (261) heap_init: Initializing. RAM available for dynamic allocation:
-I (268) heap_init: At 3FFAE6E0 len 00001920 (6 KiB): DRAM
-I (274) heap_init: At 3FFB2988 len 0002D678 (181 KiB): DRAM
-I (281) heap_init: At 3FFE0440 len 00003AE0 (14 KiB): D/IRAM
-I (287) heap_init: At 3FFE4350 len 0001BCB0 (111 KiB): D/IRAM
-I (293) heap_init: At 4008BEE4 len 0001411C (80 KiB): IRAM
-I (299) cpu_start: Pro cpu start user code
-I (318) spi_flash: detected chip: gd
-I (318) spi_flash: flash io: dio
-W (318) spi_flash: Detected size(8192k) larger than the size in the binary image header(2048k). Using the size in the binary image header.
-I (328) cpu_start: Starting scheduler on PRO CPU.
-I (0) cpu_start: Starting scheduler on APP CPU.
-I (339) PASSTHRU: [ 1 ] Start codec chip
-I (349) gpio: GPIO[19]| InputEn: 1| OutputEn: 0| OpenDrain: 0| Pullup: 1| Pulldown: 0| Intr:3
-I (369) gpio: GPIO[21]| InputEn: 0| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0
-I (369) ES8388_DRIVER: init,out:02, in:00
-I (379) AUDIO_HAL: Codec mode is 4, Ctrl:1
-I (379) PASSTHRU: [ 2 ] Create audio pipeline for playback
-I (379) PASSTHRU: [3.1] Create i2s stream to write data to codec chip
-I (389) I2S: DMA Malloc info, datalen=blocksize=1200, dma_buf_count=3
-I (399) I2S: DMA Malloc info, datalen=blocksize=1200, dma_buf_count=3
-I (429) I2S: APLL: Req RATE: 44100, real rate: 44099.988, BITS: 16, CLKM: 1, BCK_M: 8, MCLK: 11289597.000, SCLK: 1411199.625000, diva: 1, divb: 0
-I (429) LYRAT_V4_3: I2S0, MCLK output by GPIO0
-I (429) PASSTHRU: [3.2] Create i2s stream to read data from codec chip
-W (439) I2S: I2S driver already installed
-I (449) LYRAT_V4_3: I2S0, MCLK output by GPIO0
-I (449) PASSTHRU: [3.3] Register all elements to audio pipeline
-I (459) PASSTHRU: [3.4] Link it together [codec_chip]-->i2s_stream_reader-->i2s_stream_writer-->[codec_chip]
-I (469) AUDIO_PIPELINE: link el->rb, el:0x3ffb881c, tag:i2s_read, rb:0x3ffb8ba0
-I (479) PASSTHRU: [ 4 ] Set up  event listener
-I (479) PASSTHRU: [4.1] Listening event from all elements of pipeline
-I (489) PASSTHRU: [ 5 ] Start audio_pipeline
-I (489) AUDIO_ELEMENT: [i2s_read-0x3ffb881c] Element task created
-I (499) AUDIO_ELEMENT: [i2s_write-0x3ffb8490] Element task created
-I (509) AUDIO_PIPELINE: Func:audio_pipeline_run, Line:359, MEM Total:268604 Bytes
-
-I (519) AUDIO_ELEMENT: [i2s_read] AEL_MSG_CMD_RESUME,state:1
-I (519) I2S_STREAM: AUDIO_STREAM_READER,Rate:44100,ch:2
-I (549) I2S: APLL: Req RATE: 44100, real rate: 44099.988, BITS: 16, CLKM: 1, BCK_M: 8, MCLK: 11289597.000, SCLK: 1411199.625000, diva: 1, divb: 0
-I (549) AUDIO_ELEMENT: [i2s_write] AEL_MSG_CMD_RESUME,state:1
-I (559) I2S_STREAM: AUDIO_STREAM_WRITER
-I (559) AUDIO_PIPELINE: Pipeline started
-I (569) PASSTHRU: [ 6 ] Listen for all pipeline events
-I (9959) gpio: GPIO[21]| InputEn: 0| OutputEn: 1| OpenDrain: 0| Pullup: 0| Pulldown: 0| Intr:0
-W (9959) HEADPHONE: Headphone jack removed
+ciao
 
 ```
 

@@ -10,5 +10,6 @@
         "xhash": "c",
         "xtree": "c",
         "xutility": "c"
-    }
+    },
+    "idf.espAdfPathWin": "C:/Users/cecix//esp/esp-adf" //custom
 }
