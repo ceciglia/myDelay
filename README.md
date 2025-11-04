@@ -1,8 +1,8 @@
 ﻿# My Delay
-## What is it
-My delay implements a real-time modulated delay. It implements chorus/flanger/vibrato effect?????? due to its modulating capabilities. It works at 16 bit per sample to obtain an analogue feeling.
+## In brief
+My delay implements a real-time modulated delay. It produces chorus/flanger/vibrato effect?????? due to its modulating capabilities. It works at 16 bit per sample to obtain an analogue feeling.
 
-## Architecture and operating contexts
+## Technical overview and architecture
 My delay is a DSP component written in C, designed to function as an audio element within the real-time audio pipeline of the ESP-ADF environment optimized for microcontroller execution.
 It works at a sample rate of 48kHz, 16 bit per sample and it operates on fixed blocks of 512 bytes (BUF SIZE), therefore 256 samples (2 bytes per sample). All core DSP calculations (including LFO generation, interpolation and parameter smoothing) are performed using floating-point precision that is then recasted in int16_t. All the project revolves arount the my_Delay struct which defines all the components necessary to the delay to function.
 
@@ -16,16 +16,43 @@ As I mentioned before my delay is a member of the audio pipeline defined as foll
 where i2s_stream_reader and i2s_stream_writer are audio elements responsible for acquiring of audio data and then sending the data out after processing. The i2s_stream_reader reads the audio data in input, the i2s_stream_writer writes it to the output.
 
 
-## Environment Setup
+## Core DSP functionalities
 
-### Hardware Required
+### Fractional delay
+In order to obtain a chorus/flanger effect the delay through precise control of the delay time. The delay line uses a circular buffer (delay_memory) and two heads: the write head (write_index) that writes into the buffer and the read head (read_index) that reads the buffer data after x delay time (x * Ts samples). Because the time modulation forces the read index to _continuously_ (i.e. fractionally) move between integer indexes, interpolation must be used to calculate the true audio value. The interpolation employed ??? is all pass interpolation, that ensures no frequency distortion (flat magnitude response) and it is defined as follows:
+$$
+y[n] = a_{1}(x[n] – y[n-1]) + x[n-1]
+$$
 
-This example runs on the boards that are marked with a green checkbox in the [table](../../README.md#compatibility-of-examples-with-espressif-audio-boards). Please remember to select the board in menuconfig as discussed in Section [Configuration](#configuration) below.
+### Modulation
+The LFO Engine (LFO_t) provides the modulation source. It supports two waveforms (sine and square) and is responsible for producing a continuous, low-frequency signal. The LFO's phase (current_phase) is managed with a wrap-around logic (from 0 to 1), ensuring the modulation cycle is perfectly smooth and continuous.
+
+### Parameter smoothing and control
+The project includes the implementation of parameter smoothing to prevent zipper noise (a rapid, audible stepping effect) when controls are adjusted. My delay addresses this by using a target-based structure for all critical parameters. Every parameter that can be changed by the user (e.g., base_dt, feedback, dw_ratio, LFO->frequency) has a corresponding **_target** field. The parameter value is gradually moved toward the target value over several samples. 
+
+The smoothing function is a I order low-pass filter (LPF): 
+
+$$
+y[i] = y[i-1] + alpha \cdot (x[i]-y[i-1])
+$$
+
+where the alpha coefficient is a hardcoded and pre-determined constant derived from empirical testing:
+$$
+alpha = 1 - e^{\frac{-1}{(0.3 \cdot F_{s})}};
+$$
 
 
-## Build and Flash
+## Environment setup
+The project has been developed on VS Code (Visual Studio Code) using ESP-IDF and the ESP-ADF extention on VS Code following this [guide lines](https://docs.espressif.com/projects/esp-adf/en/latest/get-started/) on the ESP website.
 
-### Default IDF Branch
+### ESP-ADF
+
+### My board
+
+### Codec setup 
+
+
+
 
 This example supports IDF release/v5.0 and later branches. By default, it runs on ADF's built-in branch `$ADF_PATH/esp-idf`.
 
