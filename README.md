@@ -1,10 +1,10 @@
 ﻿# My Delay
 ## In brief
-My delay produces classic chorus/flanger/vibrato effects through real-time modulated fractional delay. It handles audio at 48Hz and 16 bit per sample to obtain an analogue-like sonic character. 
+My delay produces classic chorus/flanger/vibrato effects through real-time modulated fractional delay. It handles audio at 48Hz and 16 bit per sample to achieve an analogue-like sonic character. The ultimate goal of the development is integration into a dedicated guitar pedal product.
 
 ## Technical overview and architecture
-My delay is a DSP component written in C, designed to function as an audio element within the real-time audio pipeline of the ESP-ADF environment optimized for microcontroller execution.
-It works at a sample rate of 48kHz, 16 bit per sample and it operates on fixed blocks of bytes (BUF SIZE = 512 in this case, therefore 256 samples, i.e. 2 bytes per sample). All core DSP calculations (including LFO generation, interpolation and parameter smoothing) are performed using floating-point precision that is then recasted in int16_t. 
+My delay is a DSP component written in C, designed to function as an audio element within the real-time audio pipeline of the ESP-ADF environment, optimized for microcontroller execution.
+It works at a sample rate of 48kHz, 16 bit per sample, 2 channels. The audio element operates on fixed blocks of bytes (BUF SIZE = 512 in this case, therefore 256 samples, i.e. 2 bytes per sample). All core DSP calculations (including LFO generation, interpolation and parameter smoothing) are performed using floating-point precision that is then recasted in _int16_t_. 
 
 As I mentioned before my delay is a member of the audio pipeline defined as follows:
 
@@ -24,13 +24,14 @@ The following diagram illustrates the architecture of the delay module, showing 
 ## DSP overview
 
 ### Fractional delay
-In order to obtain a chorus/flanger/vibrato effect the delay operates through precise control of the delay time. The delay line uses a circular buffer (delay_memory) and two heads: the write head (write_index) that writes into the buffer and the read head (read_index) that reads the buffer data after x delay time ($x \cdot T_{s}$ samples). Because the time modulation forces the read index to _continuously_ (i.e. fractionally) move between integer indexes, interpolation must be used to calculate the true audio value. The interpolation employed is all-pass interpolation, that ensures no frequency distortion (flat magnitude response) and it is defined as follows:
+In order to obtain a chorus/flanger/vibrato effect the delay operates through precise control of the delay time. The delay line uses a circular buffer (delay_memory) and two heads: the write head (write_index) that writes into the buffer and the read head (read_index) that reads the buffer data after $x$ delay time ($x \cdot T_{s}$ samples). Because the time modulation forces the read index to _continuously_ (i.e. fractionally) move between integer indexes, interpolation must be used to calculate the true audio value. The interpolation employed is all-pass interpolation, that ensures no frequency distortion and flat magnitude response:
 $$
 y[n] = alpha \cdot (x[n] – y[n-1]) + x[n-1]
 $$
+The module also includes a feedback mechanism, where a portion of the delayed signal is fed back and mixed with the input of the delay. This parameter is crucial for enhancing the metallic resonance of the flanger effect.
 
 ### Modulation
-The LFO Engine (LFO_t) provides the modulation source. It supports two waveforms (sine and square) and is responsible for producing a continuous, low-frequency signal operating in the range of $0.01$ to $20$ Hz. The LFO's phase (current_phase) is managed with a wrap-around logic (from $0$ to $1$), preventing phase discontinuities.
+The LFO Engine (LFO_t) provides the modulation source. It supports two waveforms (sine and square) and is responsible for producing a continuous, low-frequency signal operating in the range of $0.01$ to $20$ Hz. The LFO's phase accumulator (current_phase) is managed with a wrap-around logic (from $0$ to $1$) preventing phase discontinuities. The modulation depth is set via the LFO->mod_amount parameter. This value directly correlates the maximum deviation of the delay time, specified in seconds.
 
 ### Parameter smoothing and control
 The project includes the implementation of parameter smoothing to prevent zipper noise (a rapid, audible stepping effect) when controls are adjusted. My delay addresses this by using a target-based structure for all critical parameters. Every parameter that can be changed by the user (e.g., base_dt, feedback, dw_ratio, LFO->frequency) has a corresponding **_target** field. The parameter value is gradually moved toward the target value over several samples. 
@@ -84,7 +85,7 @@ esp_err_t get_i2s_pins(int port, board_i2s_pin_t *i2s_config)    // here
     return ESP_OK;
 }
 ```
-I've also changed `board_def.h` in order to select a different ADC input (AUDIO_HAL_ADC_INPUT_LINE2 in this case):
+And also in `board_def.h` in order to select a different ADC input (AUDIO_HAL_ADC_INPUT_LINE2 in this case):
 ```c
 #define AUDIO_CODEC_DEFAULT_CONFIG(){                   \
         .adc_input  = AUDIO_HAL_ADC_INPUT_LINE2,        \   // here
@@ -105,11 +106,6 @@ The latest versions of the ESP32-A1S Audio Kit has the ES8388 codec on board. In
 esp_err_t es8388_init(audio_hal_codec_config_t *cfg)
 {
     // other code
-    
-    // res |= es_write_reg(ES8388_ADDR, ES8388_DACCONTROL16, 0x09);  // 0x00 audio on LIN1&RIN1,  0x09 LIN2&RIN2
-    // res |= es_write_reg(ES8388_ADDR, ES8388_DACCONTROL7, 0x00);  
-
-    // other code
 
     // set also L2 and R2 volume to 0dB (0x1E) to hear from the headphones output
     res |= es_write_reg(ES8388_ADDR, ES8388_DACCONTROL26, 0x1E); 
@@ -117,21 +113,23 @@ esp_err_t es8388_init(audio_hal_codec_config_t *cfg)
 
     // other code
 
-    // // set differential input select to LINPUT2-RINPUT2
-    // res |= es_write_reg(ES8388_ADDR, ES8388_ADCCONTROL3, 0x82);
-
-    // // set new min (-12dB) and max (35.5dB) PGA gain
-    // res |= es_write_reg(ES8388_ADDR, ES8388_ADCCONTROL10, 0x38);
-
-    // 16 Bits length, I2S serial audio data format and I2S channels swap by adjusting the L/R polarity settings in the codec driver
+    // set 16 Bits length, I2S serial audio data format and I2S channels swap by adjusting the L/R polarity settings in the codec driver
     res |= es_write_reg(ES8388_ADDR, ES8388_ADCCONTROL4, 0x2c);
 
-    // // set Master mode ADC MCLK to sampling frequency ratio to 128 
-    // res |= es_write_reg(ES8388_ADDR, ES8388_ADCCONTROL5, 0x00); 
+    // other code
 
-    // set mic left and right channel PGA gain to 0dB (it was set to 0xbb, above +24dB)
-    res |= es_write_reg(ES8388_ADDR, ES8388_ADCCONTROL1, 0x00);  // MIC Left and Right channel PGA gain 
+    // set mic left and right channel PGA gain to 0dB (It was set to 0xbb, above +24dB)
+    res |= es_write_reg(ES8388_ADDR, ES8388_ADCCONTROL1, 0x00);  
 
     // other code
 }
 ```
+
+### Menuconfig
+Some low-level system features were configured by running `idf.py menuconfig` utility to ensure optimal compatibility and performance on the target hardware.
+
+Due to the fact that `ESP32-A1S Audio Kit v2.2 A436` board wasn't natively listed in the framework's predefined options the Audio HAL configuration was manually set to: "Audio HAL -> Audio board -> **Custom audio board**".
+
+Next, the SPI flash configuration was optimized for speed. The Flash SPI mode was changed to "Serial flasher config -> Flash SPI mode -> **QIO**" that is the fastest solution as it uses 4 pins for address and data and the Flash SPI speed was set to "Serial flasher config -> Flash SPI speed -> **80 MHz**".
+
+To ensure sufficient contiguous memory for the delay buffer and low-latency operation the external PSRAM was configured. The PSRAM access method was configured to "Component config -> ESP PSRAM -> Support for external, SPI-connected RAM -> SPI RAM config -> SPI RAM access method -> **Make RAM allocatable using heap_caps_malloc(..., MALLOC_CAP_SPIRAM)**" enabling the system heap to allocate the delay memory from external RAM. Finally, the RAM clock speed was increased to $80$ MHz to reduce memory access latency and maximize data throughput: "Component config -> ESP PSRAM -> Support for external, SPI-connected RAM -> SPI RAM config -> Set RAM clock speed -> **80MHz clock speed**".
