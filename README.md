@@ -1,10 +1,10 @@
 ﻿# My Delay
 ## In brief
-My delay produces classic chorus/flanger/vibrato effects?????? through real-time modulated fractional delay. It handles audio at 48Hz and 16 bit per sample to obtain an analogue-like sonic character/feeling.
+My delay produces classic chorus/flanger/vibrato effects through real-time modulated fractional delay. It handles audio at 48Hz and 16 bit per sample to obtain an analogue-like sonic character. 
 
 ## Technical overview and architecture
 My delay is a DSP component written in C, designed to function as an audio element within the real-time audio pipeline of the ESP-ADF environment optimized for microcontroller execution.
-It works at a sample rate of 48kHz, 16 bit per sample and it operates on fixed blocks of 512 bytes (BUF SIZE), therefore 256 samples (2 bytes per sample). All core DSP calculations (including LFO generation, interpolation and parameter smoothing) are performed using floating-point precision that is then recasted in int16_t. ????????All the project revolves arount the my_Delay struct which defines all the components necessary to the delay to function.??????????
+It works at a sample rate of 48kHz, 16 bit per sample and it operates on fixed blocks of bytes (BUF SIZE = 512 in this case, therefore 256 samples, i.e. 2 bytes per sample). All core DSP calculations (including LFO generation, interpolation and parameter smoothing) are performed using floating-point precision that is then recasted in int16_t. 
 
 As I mentioned before my delay is a member of the audio pipeline defined as follows:
 
@@ -24,13 +24,13 @@ The following diagram illustrates the architecture of the delay module, showing 
 ## DSP overview
 
 ### Fractional delay
-In order to obtain a chorus/flanger effect the delay through precise control of the delay time. The delay line uses a circular buffer (delay_memory) and two heads: the write head (write_index) that writes into the buffer and the read head (read_index) that reads the buffer data after x delay time ($x \cdot T_{s}$ samples). Because the time modulation forces the read index to _continuously_ (i.e. fractionally) move between integer indexes, interpolation must be used to calculate the true audio value. The interpolation employed ??? is all pass interpolation, that ensures no frequency distortion (flat magnitude response) and it is defined as follows:
+In order to obtain a chorus/flanger/vibrato effect the delay operates through precise control of the delay time. The delay line uses a circular buffer (delay_memory) and two heads: the write head (write_index) that writes into the buffer and the read head (read_index) that reads the buffer data after x delay time ($x \cdot T_{s}$ samples). Because the time modulation forces the read index to _continuously_ (i.e. fractionally) move between integer indexes, interpolation must be used to calculate the true audio value. The interpolation employed is all-pass interpolation, that ensures no frequency distortion (flat magnitude response) and it is defined as follows:
 $$
-y[n] = a_{1}(x[n] – y[n-1]) + x[n-1]
+y[n] = alpha \cdot (x[n] – y[n-1]) + x[n-1]
 $$
 
 ### Modulation
-The LFO Engine (LFO_t) provides the modulation source. It supports two waveforms (sine and square) and is responsible for producing a continuous, low-frequency signal between $0.01$ and $20$ Hz. The LFO's phase (current_phase) is managed with a wrap-around logic (from $0$ to $1$), ensuring the modulation cycle is perfectly smooth and continuous.
+The LFO Engine (LFO_t) provides the modulation source. It supports two waveforms (sine and square) and is responsible for producing a continuous, low-frequency signal operating in the range of $0.01$ to $20$ Hz. The LFO's phase (current_phase) is managed with a wrap-around logic (from $0$ to $1$), preventing phase discontinuities.
 
 ### Parameter smoothing and control
 The project includes the implementation of parameter smoothing to prevent zipper noise (a rapid, audible stepping effect) when controls are adjusted. My delay addresses this by using a target-based structure for all critical parameters. Every parameter that can be changed by the user (e.g., base_dt, feedback, dw_ratio, LFO->frequency) has a corresponding **_target** field. The parameter value is gradually moved toward the target value over several samples. 
@@ -38,26 +38,69 @@ The project includes the implementation of parameter smoothing to prevent zipper
 The smoothing function is a $I$ order low-pass filter (LPF): 
 
 $$
-y[i] = y[i-1] + alpha \cdot (x[i]-y[i-1])
+y[n] = y[n-1] + alpha \cdot (x[n]-y[n-1])
 $$
 
 where the alpha coefficient is a hardcoded and pre-determined constant derived from empirical testing:
 $$
 alpha = 1 - e^{\frac{-1}{(0.3 \cdot F_{s})}};
 $$
+(N.B. the $alpha$ defined here is different from the one used in the all-pass interpolation)
 
 
 ## Environment configuration
-The project has been developed for the ESP32-A1S audio kit on VS Code (Visual Studio Code) using ESP-IDF and the ESP-ADF extention. The configuration has been completed following these [guide lines](https://docs.espressif.com/projects/esp-adf/en/latest/get-started/) on the ESPRESSIF website.
+The project has been developed for the ESP32-A1S audio kit on VS Code (Visual Studio Code) using ESP-IDF extention and ESP-ADF framework. The configuration has been completed following these [guide lines](https://docs.espressif.com/projects/esp-adf/en/latest/get-started/) on the ESPRESSIF website.
 
 ### ESP-ADF
-Espressif Systems Advanced Development Framework (ESP-ADF) is the official Advanced Development Framework for the ESP32, ESP32-S2, ESP32-C3, ESP32-C6, ESP32-S3, and ESP32-P4 SoCs. 
+Espressif Systems Advanced Development Framework (ESP-ADF) is the official Advanced Development Framework for the ESP32, ESP32-S2, ESP32-C3, ESP32-C6, ESP32-S3, and ESP32-P4 SoCs. For this project, I specifically used the framework's core Audio Development Framework (ADF) component, which provides the necessary functions for real-time audio processing and control.
 
 ### ESP32-A1S Audio Kit
-The project runs on the `ESP32-A1S Audio Kit v2.2 A436` development board. The board setup files used are available in this [repository](https://github.com/trombik/esp-adf-component-ai-thinker-esp32-a1s?tab=readme-ov-file).
+The project runs on the `ESP32-A1S Audio Kit v2.2 A436` development board. The board setup files used are available in this [repository](https://github.com/trombik/esp-adf-component-ai-thinker-esp32-a1s?tab=readme-ov-file). I've made the following changes in `boards_pins_config.c`:
+```c
+esp_err_t get_i2s_pins(int port, board_i2s_pin_t *i2s_config)    // here
+{
+    AUDIO_NULL_CHECK(TAG, i2s_config, return ESP_FAIL);
+    if (port == 0) {                                             // here
+        i2s_config->mck_io_num = GPIO_NUM_0;
+#if defined(CONFIG_AI_THINKER_ESP32_A1S_ES8388_VARIANT_7)
+        i2s_config->bck_io_num = GPIO_NUM_5;
+#elif defined(CONFIG_AI_THINKER_ESP32_A1S_ES8388_VARIANT_5)
+        i2s_config->bck_io_num = GPIO_NUM_27;
+#endif
+        i2s_config->ws_io_num = GPIO_NUM_25;
+        i2s_config->data_out_num = GPIO_NUM_26;
+        i2s_config->data_in_num = GPIO_NUM_35;
+    } else if (port == 1) {                                      // here
+        i2s_config->bck_io_num = -1;
+        i2s_config->ws_io_num = -1;
+        i2s_config->data_out_num = -1;
+        i2s_config->data_in_num = -1;
+    } else {
+        memset(i2s_config, -1, sizeof(board_i2s_pin_t));
+        ESP_LOGE(TAG, "i2s port %d is not supported", port);
+        return ESP_FAIL;
+    }
+
+    return ESP_OK;
+}
+```
+I've also changed `board_def.h` in order to select a different ADC input (AUDIO_HAL_ADC_INPUT_LINE2 in this case):
+```c
+#define AUDIO_CODEC_DEFAULT_CONFIG(){                   \
+        .adc_input  = AUDIO_HAL_ADC_INPUT_LINE2,        \   // here
+        .dac_output = AUDIO_HAL_DAC_OUTPUT_ALL,         \
+        .codec_mode = AUDIO_HAL_CODEC_MODE_BOTH,        \
+        .i2s_iface = {                                  \
+            .mode = AUDIO_HAL_MODE_SLAVE,               \
+            .fmt = AUDIO_HAL_I2S_NORMAL,                \
+            .samples = AUDIO_HAL_48K_SAMPLES,           \
+            .bits = AUDIO_HAL_BIT_LENGTH_16BITS,        \
+        },                                              \
+};
+```
 
 ### Codec setup 
-The latest versions of the ESP32-A1S Audio Kit has the ES8388 codec on board. In order to meet the specifications of the delay design some registers default values has been changed. Specifically the es8388.c file at this path (C:\Users\cecix\esp\esp-adf\components\audio_hal\driver\es8388\es8388.c) has been modified: 
+The latest versions of the ESP32-A1S Audio Kit has the ES8388 codec on board. In order to meet the specifications of the delay design some registers default values has been changed. Specifically the es8388.c file at this path: "<ADF_PATH>\components\audio_hal\driver\es8388\es8388.c" has been modified: 
 ```c
 esp_err_t es8388_init(audio_hal_codec_config_t *cfg)
 {
@@ -92,33 +135,3 @@ esp_err_t es8388_init(audio_hal_codec_config_t *cfg)
     // other code
 }
 ```
-
-
-## How to Use the Example
-
-### Example Functionality
-```c
-ciao
-```
-
-
-### Example Log
-A complete log is as follows:
-
-```c
-ciao
-
-```
-
-## Troubleshooting
-
-If there is no sound from the development board, or the sound is very weak, this is because by default the volume of the sound input from`AUX_IN` is low. So please increase the volume on the `Line-Out` end so that you can hear the audio output from the board.
-
-
-## Technical Support and Feedback
-Please use the following feedback channels:
-
-* For technical queries, go to the [esp32.com](https://esp32.com/viewforum.php?f=20) forum
-* For a feature request or bug report, create a [GitHub issue](https://github.com/espressif/esp-adf/issues)
-
-We will get back to you as soon as possible.

@@ -157,8 +157,8 @@ int8_t get_green_led_gpio(void)
 }
 
 //custom
-int8_t get_headphone_detect_gpio(void)
-{
-    return HEADPHONE_DETECT;
-}
+// int8_t get_headphone_detect_gpio(void)
+// {
+//     return HEADPHONE_DETECT;
+// }
 // end of custom

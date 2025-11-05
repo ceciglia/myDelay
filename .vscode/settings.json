@@ -11,5 +11,6 @@
         "xtree": "c",
         "xutility": "c"
     },
-    "idf.espAdfPathWin": "C:/Users/cecix//esp/esp-adf" //custom
+    "idf.espAdfPathWin": "C:/Users/cecix//esp/esp-adf", //custom
+    "idf.espAdfPath": "C:/Users/cecix//esp/esp-adf" //custom
 }
