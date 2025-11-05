@@ -130,7 +130,7 @@ esp_err_t myDelay_set_feedback(audio_element_handle_t self, float new_feedback) 
     return ESP_OK;
 }
 
-esp_err_t myDelay_set_dw_ratio(audio_element_handle_t self, float new_dw_ratio) {
+esp_err_t myDelay_set_dw_ratio(audio_element_handle_t self, float new_dw_ratio) {   // STEP 0.001
     myDelay_t *myDelay = (myDelay_t *)audio_element_getdata(self);
     if (new_dw_ratio < 0.000f || new_dw_ratio > 1.000f) {
         ESP_LOGE(TAG, "Dry/Wet ratio must be between 0.0 and 1.0. (line %d)", __LINE__);
@@ -240,12 +240,6 @@ float LFO_get_next_sample(LFO_t *LFO)
         case 1: // Triangle wave
             sample = 4.0f * fabsf(LFO->current_phase - 0.5f) - 1.0f; //check
             break;
-        // case 2: // Square wave
-        //     sample = (LFO->current_phase >= 0.5f) ? 1.0f : -1.0f;
-        //     break;
-        // case 3: // Sawtooth wave (rising)
-        //     sample = 2.0f * LFO->current_phase - 1.0f; //check
-        //     break;
         default:
             sample = 0.0f; // Default to silence for unknown waveform types
             break;
@@ -306,16 +300,6 @@ static esp_err_t myDelay_open(audio_element_handle_t self)
 
     myDelay->memory_size = (int)(MYDELAY_MAX_DELAY_TIME * myDelay->samplerate)  + BUF_SIZE / sizeof(int16_t) ; //custom: è in campioni
     myDelay->memory_size = myDelay->memory_size * myDelay->channel; //custom!!! la raddoppio se sono in stereo perché ho i canali interleaved
-    
-    // size_t delayBufferSize = myDelay->memory_size * sizeof(int16_t); //custom
-    // ESP_LOGI(TAG, "myDelay memory size in samples: %d", delayBufferSize);
-    // //custom
-    // myDelay->delay_memory = (unsigned char *)calloc(1, BUF_SIZE); //custom
-    // if (myDelay->delay_memory == NULL) {
-    //     ESP_LOGE(TAG, "calloc buffer failed. (line %d)", __LINE__);
-    //     return ESP_ERR_NO_MEM;
-    // }
-    // memset(myDelay->delay_memory, 0, BUF_SIZE);
     
     //versione con PSRAM
     size_t delay_bytes = (size_t)myDelay->memory_size * sizeof(int16_t); //custom: è in byte

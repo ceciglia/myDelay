@@ -48,32 +48,14 @@ void app_main(void)
     i2s_stream_cfg_t i2s_cfg = I2S_STREAM_CFG_DEFAULT();
     i2s_cfg.type = AUDIO_STREAM_WRITER;
     i2s_cfg.std_cfg.clk_cfg.sample_rate_hz = 48000;
-    // i2s_cfg.std_cfg.slot_cfg.data_bit_width = I2S_DATA_BIT_WIDTH_24BIT;
-    // i2s_cfg.std_cfg.slot_cfg.slot_bit_width = I2S_SLOT_BIT_WIDTH_32BIT;
-    // i2s_cfg.std_cfg.slot_cfg.slot_mode = I2S_SLOT_MODE_MONO;
-    // i2s_cfg.std_cfg.slot_cfg.slot_mask = I2S_STD_SLOT_RIGHT;
-    i2s_cfg.chan_cfg.role = I2S_ROLE_MASTER; 
-    // i2s_cfg.std_cfg.slot_cfg.ws_pol = false;
-    // i2s_cfg.chan_cfg.dma_desc_num = 3;
-    // i2s_cfg.chan_cfg.dma_frame_num = 312;
-    // i2s_cfg.std_cfg.clk_cfg.mclk_multiple = I2S_MCLK_MULTIPLE_384;
-    // i2s_cfg.volume = 100; 
+    i2s_cfg.chan_cfg.role = I2S_ROLE_MASTER;
     i2s_stream_writer = i2s_stream_init(&i2s_cfg);
 
     ESP_LOGI(TAG, "[3.2] Create i2s stream to read data from codec chip");
     i2s_stream_cfg_t i2s_cfg_read = I2S_STREAM_CFG_DEFAULT();
     i2s_cfg_read.type = AUDIO_STREAM_READER;
     i2s_cfg_read.std_cfg.clk_cfg.sample_rate_hz = 48000;
-    // i2s_cfg_read.std_cfg.slot_cfg.data_bit_width = I2S_DATA_BIT_WIDTH_24BIT;
-    // i2s_cfg_read.std_cfg.slot_cfg.slot_bit_width = I2S_SLOT_BIT_WIDTH_32BIT;
-    // i2s_cfg_read.std_cfg.slot_cfg.slot_mode = I2S_SLOT_MODE_MONO;
-    // i2s_cfg_read.std_cfg.slot_cfg.slot_mask = I2S_STD_SLOT_RIGHT;
     i2s_cfg_read.chan_cfg.role = I2S_ROLE_MASTER; 
-    // i2s_cfg_read.std_cfg.slot_cfg.ws_pol = false;
-    // i2s_cfg_read.chan_cfg.dma_desc_num = 3;
-    // i2s_cfg_read.chan_cfg.dma_frame_num = 312;
-    // i2s_cfg_read.std_cfg.clk_cfg.mclk_multiple = I2S_MCLK_MULTIPLE_384;
-    // i2s_cfg_read.volume = 100;
     i2s_stream_reader = i2s_stream_init(&i2s_cfg_read);
 
     myDelay_cfg_t myDelay_cfg = DEFAULT_MYDELAY_CONFIG();
@@ -89,31 +71,31 @@ void app_main(void)
     audio_pipeline_link(pipeline, &link_tag[0], 3);
 
     // peripherals
-    ESP_LOGI(TAG, "[ 3 ] Initialize peripherals"); //CHECKKKK
+    ESP_LOGI(TAG, "[ 4 ] Initialize peripherals"); 
     esp_periph_config_t periph_cfg = DEFAULT_ESP_PERIPH_SET_CONFIG();
     esp_periph_set_handle_t set = esp_periph_set_init(&periph_cfg);
 
-    ESP_LOGI(TAG, "[3.1] Initialize keys on board");
+    ESP_LOGI(TAG, "[ 5 ] Initialize keys on board");
     audio_board_key_init(set);
 
     //end peripherals
 
-    ESP_LOGI(TAG, "[ 4 ] Set up  event listener");
+    ESP_LOGI(TAG, "[ 6 ] Set up  event listener");
     audio_event_iface_cfg_t evt_cfg = AUDIO_EVENT_IFACE_DEFAULT_CFG();
     audio_event_iface_handle_t evt = audio_event_iface_init(&evt_cfg);
 
-    ESP_LOGI(TAG, "[4.1] Listening event from all elements of pipeline");
+    ESP_LOGI(TAG, "[6.1] Listening event from all elements of pipeline");
     audio_pipeline_set_listener(pipeline, evt);
 
     //perip
-    ESP_LOGI(TAG, "[4.2] Listening event from peripherals"); // CHECKKKK
+    ESP_LOGI(TAG, "[6.2] Listening event from peripherals"); // CHECKKKK
     audio_event_iface_set_listener(esp_periph_set_get_event_iface(set), evt);
     // end perip
 
     i2s_stream_set_clk(i2s_stream_reader, 48000, 16, 2); // CHECKK THIS 
     i2s_stream_set_clk(i2s_stream_writer, 48000, 16, 2); /// CHECKK THIS
     
-    ESP_LOGI(TAG, "[ 5 ] Start audio_pipeline");
+    ESP_LOGI(TAG, "[ 7 ] Start audio_pipeline");
     audio_pipeline_run(pipeline);
 
     // testing
@@ -123,9 +105,11 @@ void app_main(void)
     float dw = myDelay_get_dw_ratio(delay);
     float lfo_freq = myDelay_get_LFO_frequency(delay);
     float lfo_mod_amount = myDelay_get_LFO_mod_amount(delay);
+    int pot_value = 0; //custom
+    int count = 0; //custom
     // end testing
 
-    ESP_LOGI(TAG, "[ 6 ] Listen for all pipeline events");
+    ESP_LOGI(TAG, "[ 8 ] Listen for all pipeline events");
     while (1) {
         audio_event_iface_msg_t msg;
         esp_err_t ret = audio_event_iface_listen(evt, &msg, portMAX_DELAY);
@@ -175,6 +159,12 @@ void app_main(void)
                 myDelay_set_dw_ratio(delay, dw); // example
                 ESP_LOGI(TAG, "[ * ] Changed dry/wet ratio to %.4f", dw);
             } 
+
+            // pot_value = analogRead(18); //custom
+            // if (count%100000) {
+            //     ESP_LOGI(TAG, "pot_value is %d", pot_value);
+            // }
+
         }
         /// end of buttons management
 
@@ -185,9 +175,10 @@ void app_main(void)
             ESP_LOGW(TAG, "[ * ] Stop event received");
             break;
         }
+        count++; // custom
     }
 
-    ESP_LOGI(TAG, "[ 7 ] Stop audio_pipeline");
+    ESP_LOGI(TAG, "[ 9 ] Stop audio_pipeline");
     audio_pipeline_stop(pipeline);
     audio_pipeline_wait_for_stop(pipeline);
     audio_pipeline_terminate(pipeline);
