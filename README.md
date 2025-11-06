@@ -25,9 +25,11 @@ The following diagram illustrates the architecture of the delay module, showing 
 
 ### Fractional delay
 In order to obtain a chorus/flanger/vibrato effect the delay operates through precise control of the delay time. The delay line uses a circular buffer (delay_memory) and two heads: the write head (write_index) that writes into the buffer and the read head (read_index) that reads the buffer data after $x$ delay time ($x \cdot T_{s}$ samples). Because the time modulation forces the read index to _continuously_ (i.e. fractionally) move between integer indexes, interpolation must be used to calculate the true audio value. The interpolation employed is all-pass interpolation, that ensures no frequency distortion and flat magnitude response:
+
 $$
 y[n] = alpha \cdot (x[n] – y[n-1]) + x[n-1]
 $$
+
 The module also includes a feedback mechanism, where a portion of the delayed signal is fed back and mixed with the input of the delay. This parameter is crucial for enhancing the metallic resonance of the flanger effect.
 
 ### Modulation
@@ -43,9 +45,11 @@ y[n] = y[n-1] + alpha \cdot (x[n]-y[n-1])
 $$
 
 where the alpha coefficient is a hardcoded and pre-determined constant derived from empirical testing:
+
 $$
-alpha = 1 - e^{\frac{-1}{(0.3 \cdot F_{s})}};
+alpha = 1 - e^{\frac{-1}{(0.3 \cdot F_{s})}}
 $$
+
 (N.B. the $alpha$ defined here is different from the one used in the all-pass interpolation)
 
 
