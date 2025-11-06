@@ -13,7 +13,7 @@ As I mentioned before my delay is a member of the audio pipeline defined as foll
 [codec_chip] ---> i2s_stream_reader ---> delay ---> i2s_stream_writer ---> [codec_chip]
 
 ```
-where i2s_stream_reader and i2s_stream_writer are audio elements responsible for acquiring of audio data and then sending the data out after processing. The i2s_stream_reader reads the audio data in input, the i2s_stream_writer writes it to the output.
+where _i2s_stream_reader_ and _i2s_stream_writer_ are audio elements responsible for acquiring of audio data and then sending the data out after processing. The _i2s_stream_reader_ reads the audio data in input, the _i2s_stream_writer_ writes it to the output.
 
 ### My delay design
 The following diagram illustrates the architecture of the delay module, showing the relations between the DSP functional blocks.
@@ -24,7 +24,7 @@ The following diagram illustrates the architecture of the delay module, showing 
 ## DSP overview
 
 ### Fractional delay
-In order to obtain a chorus/flanger/vibrato effect the delay operates through precise control of the delay time. The delay line uses a circular buffer (delay_memory) and two heads: the write head (write_index) that writes into the buffer and the read head (read_index) that reads the buffer data after $x$ delay time ($x \cdot T_{s}$ samples). Because the time modulation forces the read index to _continuously_ (i.e. fractionally) move between integer indexes, interpolation must be used to calculate the true audio value. The interpolation employed is all-pass interpolation, that ensures no frequency distortion and flat magnitude response:
+In order to obtain a chorus/flanger/vibrato effect the delay operates through precise control of the delay time. The delay line uses a circular buffer (`delay_memory`) and two heads: the write head (`write_index`) that writes into the buffer and the read head (`read_index`) that reads the buffer data after $x$ delay time ($x / T_{s}$ samples). Because the time modulation forces the read index to _continuously_ move between integer indexes, interpolation must be used to calculate the true audio value. The interpolation employed is all-pass interpolation, that ensures no frequency distortion and flat magnitude response:
 
 $$
 y[n] = alpha \cdot (x[n] – y[n-1]) + x[n-1]
@@ -33,10 +33,10 @@ $$
 The module also includes a feedback mechanism, where a portion of the delayed signal is fed back and mixed with the input of the delay. This parameter is crucial for enhancing the metallic resonance of the flanger effect.
 
 ### Modulation
-The LFO Engine (LFO_t) provides the modulation source. It supports two waveforms (sine and square) and is responsible for producing a continuous, low-frequency signal operating in the range of $0.01$ to $20$ Hz. The LFO's phase accumulator (current_phase) is managed with a wrap-around logic (from $0$ to $1$) preventing phase discontinuities. The modulation depth is set via the LFO->mod_amount parameter. This value directly correlates the maximum deviation of the delay time, specified in seconds.
+The LFO Engine (_LFO_t_) provides the modulation source. It supports two waveforms (sine and square) and is responsible for producing a continuous, low-frequency signal operating in the range of $0.01$ to $20$ Hz. The LFO's phase accumulator (`current_phase`) is managed with a wrap-around logic (from $0$ to $1$) preventing phase discontinuities. The modulation depth is set via the `LFO->mod_amount` parameter. This value directly correlates the maximum deviation of the delay time, specified in seconds.
 
 ### Parameter smoothing and control
-The project includes the implementation of parameter smoothing to prevent zipper noise (a rapid, audible stepping effect) when controls are adjusted. My delay addresses this by using a target-based structure for all critical parameters. Every parameter that can be changed by the user (e.g., base_dt, feedback, dw_ratio, LFO->frequency) has a corresponding **_target** field. The parameter value is gradually moved toward the target value over several samples. 
+The project includes the implementation of parameter smoothing to prevent zipper noise (a rapid, audible stepping effect) when controls are adjusted. My delay addresses this by using a target-based structure for all critical parameters. Every parameter that can be changed by the user (e.g., `base_dt`, `feedback`, `dw_ratio`, `LFO->frequency`) has a corresponding **_target** field. The parameter value is gradually moved toward the target value over several samples. 
 
 The smoothing function is a $I$ order low-pass filter (LPF): 
 
@@ -89,7 +89,7 @@ esp_err_t get_i2s_pins(int port, board_i2s_pin_t *i2s_config)    // here
     return ESP_OK;
 }
 ```
-And also in `board_def.h` in order to select a different ADC input (AUDIO_HAL_ADC_INPUT_LINE2 in this case):
+And also in `board_def.h` in order to select a different ADC input (_AUDIO_HAL_ADC_INPUT_LINE2_ in this case):
 ```c
 #define AUDIO_CODEC_DEFAULT_CONFIG(){                   \
         .adc_input  = AUDIO_HAL_ADC_INPUT_LINE2,        \   // here
