@@ -30,10 +30,13 @@ $$
 y[n] = alpha \cdot (x[n] – y[n-1]) + x[n-1]
 $$
 
-The module also includes a feedback mechanism, where a portion of the delayed signal is fed back and mixed with the input of the delay. This parameter is crucial for enhancing the metallic resonance of the flanger effect.
-
 ### Modulation
-The LFO Engine (_LFO_t_) provides the modulation source. It supports two waveforms (sine and square) and is responsible for producing a continuous, low-frequency signal operating in the range of $0.01$ to $20$ Hz. The LFO's phase accumulator (`current_phase`) is managed with a wrap-around logic (from $0$ to $1$) preventing phase discontinuities. The modulation depth is set via the `LFO->mod_amount` parameter. This value directly correlates the maximum deviation of the delay time, specified in seconds.
+The LFO Engine (_LFO_t_) provides the modulation source. It supports two waveforms (sine and square) and is responsible for producing a continuous, low-frequency signal operating in the range of $0.01$ to $20$ Hz. The LFO's phase accumulator (`current_phase`) is managed with a wrap-around logic (from $0$ to $1$) preventing phase discontinuities. The modulation depth is set via the `LFO->mod_amount` parameter. This value directly correlates the maximum deviation of the delay time (`base_dt`), specified in seconds.
+
+### Feedback and dry/wet parameters
+The module incorporates a feedback mechanism, where a portion of the delayed signal is fed back and mixed with the input of the delay. This parameter is crucial for enhancing the metallic resonance of the flanger effect. It is strictly bounded between $0$ and $0.999$ to prevent exponential gain runaway and maintain system stability.
+
+Separately, the Dry/Wet ratio (`dw_ratio`) is the fundamental mix parameter that determines the overall effect output, balancing the original dry (unprocessed) signal against the wet (delayed and modulated) signal. This value ranges from $0$ (100% wet, full effect) to $1$ (100% dry, no effect). To mitigate the perceived drop in volume that can occur during crossfading, a square root rule is employed to maintain perceived constant power across the entire mixing range.
 
 ### Parameter smoothing and control
 The project includes the implementation of parameter smoothing to prevent zipper noise (a rapid, audible stepping effect) when controls are adjusted. My delay addresses this by using a target-based structure for all critical parameters. Every parameter that can be changed by the user (e.g., `base_dt`, `feedback`, `dw_ratio`, `LFO->frequency`) has a corresponding **_target** field. The parameter value is gradually moved toward the target value over several samples. 
