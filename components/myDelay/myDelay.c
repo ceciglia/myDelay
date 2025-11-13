@@ -466,12 +466,12 @@ if (r_size > 0) {
             float output_sample = (roundf(myDelay->dw_ratio * 1000.0f) / 1000.0f == 1.0f) || (roundf(myDelay->dw_ratio * 1000.0f) / 1000.0f == 0.0f) ? (roundf(myDelay->dw_ratio * 1000.0f) / 1000.0f == 1.0f ? input_sample : sample_value) : sample_value * sqrtf(1.0f - myDelay->dw_ratio) + input_sample * sqrtf(myDelay->dw_ratio); //bypass when dw_ratio is 1.0
             
             // DEBUG
-            // if (output_sample > myDelay->max) {
-            //     myDelay->max = output_sample; 
-            // }
-            // if (output_sample < myDelay->min) {
-            //     myDelay->min = output_sample; 
-            // }
+            if (output_sample > myDelay->max) {
+                myDelay->max = output_sample; 
+            }
+            if (output_sample < myDelay->min) {
+                myDelay->min = output_sample; 
+            }
             if (myDelay->debug%1000001==0) {
                 ESP_LOGI(TAG, "my Delay SPECS");
                 // ESP_LOGI(TAG, "my Delay input_sample[%d][%d]: %.3f", i, ch, input_sample);
@@ -488,8 +488,8 @@ if (r_size > 0) {
                 ESP_LOGI(TAG, "my Delay base dt: %.3f", myDelay->base_dt);
                 ESP_LOGI(TAG, "DRY WET RATIO: %.3f", myDelay->dw_ratio);
                 ESP_LOGI(TAG, "SQRT DW: sqrtf(1.0f - myDelay->dw_ratio) : %.4f e sqrtf(myDelay->dw_ratio) : %.4f", sqrt(1.0f - myDelay->dw_ratio), sqrt(myDelay->dw_ratio));
-            //     ESP_LOGI(TAG, "myDelay MAX output_sample: %.3f", myDelay->max); 
-            //     ESP_LOGI(TAG, "myDelay MIN output_sample: %.3f", myDelay->min); 
+                ESP_LOGI(TAG, "myDelay MAX output_sample: %.3f", myDelay->max); 
+                ESP_LOGI(TAG, "myDelay MIN output_sample: %.3f", myDelay->min); 
             //     ESP_LOGI(TAG, "p_buf_16[%d]: %d", i, p_buf_16[i]);
             }
             myDelay->debug = myDelay->debug + 1; //custom da cancellare 

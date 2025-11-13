@@ -7,12 +7,111 @@
 #include "board.h"
 #include "myDelay.h"
 
-#include "esp_peripherals.h"
-#include "periph_touch.h"
-#include "periph_adc_button.h"
-#include "periph_button.h"
+#include "esp_peripherals.h" // CHECKKKKKKKKKKK
+#include "periph_touch.h" // CHECKKKKKKKKKKK
+#include "periph_adc_button.h" // CHECKKKKKKKKKKK
+#include "periph_button.h" // CHECKKKKKKKKKKK
+
+// #include "esp_wifi.h"   //custom
+#include "esp_adc/adc_oneshot.h"        //custom
+
+//adc
+#include <stdio.h>
+#include "sdkconfig.h"
+#include "freertos/semphr.h"
+
+#include <stdint.h>
+#include <sys/unistd.h>
+#include "driver/adc_types_legacy.h"
+#include "esp_err.h"
+#include "freertos/FreeRTOSConfig_arch.h"
+#include "freertos/idf_additions.h"
+#include "freertos/projdefs.h"
+#include "hal/adc_types.h"
+#include "hal/touch_sensor_types.h"
+#include "portmacro.h"
+#include "soc/soc_caps.h"
+
+// third try
+static int adc_raw[2][10];
+static int voltage[2][10];
+static bool example_adc_calibration_init(adc_unit_t unit, adc_channel_t channel, adc_atten_t atten, adc_cali_handle_t *out_handle);
+static void example_adc_calibration_deinit(adc_cali_handle_t handle);
+// end third try
+
+//end adc
+
 
 static const char *TAG = "MYDELAYPROJECT";
+
+// adc
+// third try
+/*---------------------------------------------------------------
+        ADC Calibration
+---------------------------------------------------------------*/
+static bool example_adc_calibration_init(adc_unit_t unit, adc_channel_t channel, adc_atten_t atten, adc_cali_handle_t *out_handle)
+{
+    adc_cali_handle_t handle = NULL;
+    esp_err_t ret = ESP_FAIL;
+    bool calibrated = false;
+
+#if ADC_CALI_SCHEME_CURVE_FITTING_SUPPORTED
+    if (!calibrated) {
+        ESP_LOGI(TAG, "calibration scheme version is %s", "Curve Fitting");
+        adc_cali_curve_fitting_config_t cali_config = {
+            .unit_id = unit,
+            .chan = channel,
+            .atten = atten,
+            .bitwidth = ADC_BITWIDTH_DEFAULT,
+        };
+        ret = adc_cali_create_scheme_curve_fitting(&cali_config, &handle);
+        if (ret == ESP_OK) {
+            calibrated = true;
+        }
+    }
+#endif
+
+#if ADC_CALI_SCHEME_LINE_FITTING_SUPPORTED
+    if (!calibrated) {
+        ESP_LOGI(TAG, "calibration scheme version is %s", "Line Fitting");
+        adc_cali_line_fitting_config_t cali_config = {
+            .unit_id = unit,
+            .atten = atten,
+            .bitwidth = ADC_BITWIDTH_DEFAULT,
+        };
+        ret = adc_cali_create_scheme_line_fitting(&cali_config, &handle);
+        if (ret == ESP_OK) {
+            calibrated = true;
+        }
+    }
+#endif
+
+    *out_handle = handle;
+    if (ret == ESP_OK) {
+        ESP_LOGI(TAG, "Calibration Success");
+    } else if (ret == ESP_ERR_NOT_SUPPORTED || !calibrated) {
+        ESP_LOGW(TAG, "eFuse not burnt, skip software calibration");
+    } else {
+        ESP_LOGE(TAG, "Invalid arg or no memory");
+    }
+
+    return calibrated;
+}
+
+static void example_adc_calibration_deinit(adc_cali_handle_t handle)
+{
+#if ADC_CALI_SCHEME_CURVE_FITTING_SUPPORTED
+    ESP_LOGI(TAG, "deregister %s calibration scheme", "Curve Fitting");
+    ESP_ERROR_CHECK(adc_cali_delete_scheme_curve_fitting(handle));
+
+#elif ADC_CALI_SCHEME_LINE_FITTING_SUPPORTED
+    ESP_LOGI(TAG, "deregister %s calibration scheme", "Line Fitting");
+    ESP_ERROR_CHECK(adc_cali_delete_scheme_line_fitting(handle));
+#endif
+}
+// end third try
+
+//end adc
 
 void app_main(void)
 {
@@ -21,7 +120,7 @@ void app_main(void)
     
     esp_log_level_set("*", ESP_LOG_INFO);
     esp_log_level_set(TAG, ESP_LOG_DEBUG);
-    
+
     ESP_LOGI(TAG, "[ 1 ] Start codec chip");
     audio_board_handle_t board_handle = audio_board_init();
     
@@ -32,7 +131,7 @@ void app_main(void)
         .bits = AUDIO_HAL_BIT_LENGTH_16BITS,
     };     
 
-    // audio_hal_set_volume(board_handle->audio_hal, 80);
+    audio_hal_set_volume(board_handle->audio_hal, 80);
     audio_hal_codec_iface_config(board_handle->audio_hal, AUDIO_HAL_CODEC_MODE_BOTH, &iface);
     audio_hal_ctrl_codec(board_handle->audio_hal, AUDIO_HAL_CODEC_MODE_BOTH, AUDIO_HAL_CTRL_START);
     audio_hal_enable_pa(board_handle->audio_hal, true); 
@@ -77,7 +176,6 @@ void app_main(void)
 
     ESP_LOGI(TAG, "[ 5 ] Initialize keys on board");
     audio_board_key_init(set);
-
     //end peripherals
 
     ESP_LOGI(TAG, "[ 6 ] Set up  event listener");
@@ -87,13 +185,55 @@ void app_main(void)
     ESP_LOGI(TAG, "[6.1] Listening event from all elements of pipeline");
     audio_pipeline_set_listener(pipeline, evt);
 
-    //perip
+    // perip
     ESP_LOGI(TAG, "[6.2] Listening event from peripherals"); // CHECKKKK
     audio_event_iface_set_listener(esp_periph_set_get_event_iface(set), evt);
     // end perip
 
     i2s_stream_set_clk(i2s_stream_reader, 48000, 16, 2); // CHECKK THIS 
     i2s_stream_set_clk(i2s_stream_writer, 48000, 16, 2); /// CHECKK THIS
+    
+    // wifi check
+    
+    // esp_wifi_disconnect();
+    // esp_wifi_stop();
+    // esp_wifi_deinit();
+    
+    // wifi_mode_t mode;
+    // esp_err_t err = esp_wifi_get_mode(&mode);
+
+    // if (err == ESP_OK) {
+    //     ESP_LOGI(TAG, "err = esp ok");
+    // } else if (err == ESP_ERR_WIFI_NOT_INIT) {
+    //     ESP_LOGI(TAG, "err = ESP_ERR_WIFI_NOT_INIT");
+    // }
+
+    // end wifi check
+    
+    // adc 
+    // third try
+    //-------------ADC2 Init---------------//
+    adc_oneshot_unit_handle_t adc2_handle;
+    adc_oneshot_unit_init_cfg_t init_config2 = {
+        .unit_id = ADC_UNIT_2,
+        .ulp_mode = ADC_ULP_MODE_DISABLE,
+    };
+    ESP_ERROR_CHECK(adc_oneshot_new_unit(&init_config2, &adc2_handle));
+
+    //-------------ADC2 Calibration Init---------------//
+    adc_cali_handle_t adc2_cali_handle = NULL;
+    bool do_calibration2 = example_adc_calibration_init(ADC_UNIT_2, ADC_CHANNEL_6, ADC_ATTEN_DB_12, &adc2_cali_handle);
+
+    //-------------ADC2 Config---------------//
+    // custom
+    adc_oneshot_chan_cfg_t config = {
+        .atten = ADC_ATTEN_DB_12,
+        .bitwidth = ADC_BITWIDTH_DEFAULT,
+    };
+    //custom
+    ESP_ERROR_CHECK(adc_oneshot_config_channel(adc2_handle, ADC_CHANNEL_6, &config));
+    // end third try
+    // end adc
     
     ESP_LOGI(TAG, "[ 7 ] Start audio_pipeline");
     audio_pipeline_run(pipeline);
@@ -105,18 +245,20 @@ void app_main(void)
     float dw = myDelay_get_dw_ratio(delay);
     float lfo_freq = myDelay_get_LFO_frequency(delay);
     float lfo_mod_amount = myDelay_get_LFO_mod_amount(delay);
-    int pot_value = 0; //custom
     int count = 0; //custom
-    // end testing
 
+    // end testing
+    
     ESP_LOGI(TAG, "[ 8 ] Listen for all pipeline events");
+
     while (1) {
         audio_event_iface_msg_t msg;
-        esp_err_t ret = audio_event_iface_listen(evt, &msg, portMAX_DELAY);
-        if (ret != ESP_OK) {
-            ESP_LOGE(TAG, "[ * ] Event interface error : %d", ret);
-            continue;
-        }
+        // esp_err_t ret = audio_event_iface_listen(evt, &msg, portMAX_DELAY); 
+        esp_err_t ret = audio_event_iface_listen(evt, &msg, 1000 / portTICK_RATE_MS); // custom
+        // if (ret != ESP_OK) {
+        //     ESP_LOGE(TAG, "[ * ] Event interface error : %d", ret);
+        //     continue;
+        // }
 
         // buttons management
         if ((msg.source_type == PERIPH_ID_TOUCH || msg.source_type == PERIPH_ID_BUTTON || msg.source_type == PERIPH_ID_ADC_BTN)
@@ -125,30 +267,40 @@ void app_main(void)
                 base_dt += 0.5f;
                 base_dt = roundf(base_dt * 10000.0f) / 10000.0f;
                 base_dt = base_dt > MYDELAY_MAX_DELAY_TIME ? 0.0001f : base_dt;
-                myDelay_set_base_dt_target(delay, base_dt); // example
-                ESP_LOGI(TAG, "[ * ] Changed base delay time target to %.4f seconds", base_dt);
+                esp_err_t ret = myDelay_set_base_dt_target(delay, base_dt); // example
+                if (ret == ESP_OK) {
+                    ESP_LOGI(TAG, "[ * ] Changed base delay time target to %.4f seconds", base_dt);
+                }
             } else if ((int) msg.data == get_input_rec_id()) { // key 2
                 fb += 0.05f;
                 fb = roundf(fb * 1000.0f) / 1000.0f;
                 fb = fb > 0.999f ? 0.0f : fb;
-                myDelay_set_feedback(delay, fb); // example
-                ESP_LOGI(TAG, "[ * ] Changed feedback to %.3f", fb);
+                esp_err_t ret = myDelay_set_feedback(delay, fb); // example
+                if (ret == ESP_OK) {
+                    ESP_LOGI(TAG, "[ * ] Changed feedback to %.3f", fb);
+                }
             } else if ((int) msg.data == get_input_play_id()) { // key 3
                 wf = (wf + 1) % 2;
-                myDelay_set_LFO_waveform(delay, wf); // example
-                ESP_LOGI(TAG, "[ * ] Changed LFO waveform to %d", wf);
+                esp_err_t ret = myDelay_set_LFO_waveform(delay, wf); // example
+                if (ret == ESP_OK) {
+                    ESP_LOGI(TAG, "[ * ] Changed LFO waveform to %d", wf);
+                }
             } else if ((int) msg.data == get_input_set_id()) { // key 4
                 lfo_freq += 0.5f;
                 lfo_freq = roundf(lfo_freq * 100.0f) / 100.0f;
                 lfo_freq = lfo_freq > 20.0f ? 0.01f : lfo_freq;
-                myDelay_set_LFO_frequency(delay, lfo_freq); // example
-                ESP_LOGI(TAG, "[ * ] Changed LFO frequency to %.3f Hz", lfo_freq);
+                esp_err_t ret = myDelay_set_LFO_frequency(delay, lfo_freq); // example
+                if (ret == ESP_OK) {
+                    ESP_LOGI(TAG, "[ * ] Changed LFO frequency to %.3f Hz", lfo_freq);
+                }
             } else if ((int) msg.data == get_input_voldown_id()) { // key 5
                 lfo_mod_amount += 0.01f;
                 lfo_mod_amount = roundf(lfo_mod_amount * 1000.0f) / 1000.0f;
                 lfo_mod_amount = lfo_mod_amount > 1.0f ? 0.001f : lfo_mod_amount;
-                myDelay_set_LFO_mod_amount(delay, lfo_mod_amount); // example
-                ESP_LOGI(TAG, "[ * ] Changed LFO modulation amount to %.3f", lfo_mod_amount);
+                esp_err_t ret = myDelay_set_LFO_mod_amount(delay, lfo_mod_amount); // example
+                if (ret == ESP_OK) {
+                    ESP_LOGI(TAG, "[ * ] Changed LFO modulation amount to %.3f", lfo_mod_amount);
+                }
             } else if ((int) msg.data == get_input_volup_id()) { // key 6
                 // player_volume = (player_volume + 10) % 100;
                 // audio_hal_set_volume(board_handle->audio_hal, player_volume);
@@ -156,17 +308,29 @@ void app_main(void)
                 dw += 0.1f;
                 dw = roundf(dw * 1000.0f) / 1000.0f;
                 dw = dw > 1.0f ? 0.0f : dw;
-                myDelay_set_dw_ratio(delay, dw); // example
-                ESP_LOGI(TAG, "[ * ] Changed dry/wet ratio to %.4f", dw);
+                esp_err_t ret = myDelay_set_dw_ratio(delay, dw); // example
+                if (ret == ESP_OK) {
+                    ESP_LOGI(TAG, "[ * ] Changed dry/wet ratio to %.4f", dw);
+                }
             } 
-
-            // pot_value = analogRead(18); //custom
-            // if (count%100000) {
-            //     ESP_LOGI(TAG, "pot_value is %d", pot_value);
-            // }
-
+    
+        } else {
+            //adc
+            // third try
+            ESP_LOGI(TAG, "%s...................................................ADC2 UNIT READING...................................................%s", "\033[35m","\033[35m");
+            ESP_ERROR_CHECK(adc_oneshot_read(adc2_handle, ADC_CHANNEL_6, &adc_raw[1][0]));
+            ESP_LOGI(TAG, "%sADC%d Channel[%d] Raw Data: %d %s", "\033[35m", ADC_UNIT_2 + 1, ADC_CHANNEL_6, adc_raw[1][0], "\033[35m");
+            if (do_calibration2) {
+                ESP_ERROR_CHECK(adc_cali_raw_to_voltage(adc2_cali_handle, adc_raw[1][0], &voltage[1][0]));
+                ESP_LOGI(TAG, "%sADC%d Channel[%d] Cali Voltage: %d mV %s", "\033[35m", ADC_UNIT_2 + 1, ADC_CHANNEL_6, voltage[1][0], "\033[35m");
+            }
+            ESP_LOGI(TAG, "%s.......................................................................................................................%s", "\033[35m","\033[35m");
+            continue;
+            // end third try
+            // end adc
         }
-        /// end of buttons management
+            
+        // end of buttons management 
 
         /* Stop when the last pipeline element (i2s_stream_writer in this case) receives stop event */
         if (msg.source_type == AUDIO_ELEMENT_TYPE_ELEMENT && msg.source == (void *) i2s_stream_writer
@@ -175,8 +339,17 @@ void app_main(void)
             ESP_LOGW(TAG, "[ * ] Stop event received");
             break;
         }
-        count++; // custom
+        // count++; // custom
     }
+
+    // adc
+    // third try
+    ESP_ERROR_CHECK(adc_oneshot_del_unit(adc2_handle));
+    if (do_calibration2) {
+        example_adc_calibration_deinit(adc2_cali_handle);
+    }
+    // end third try
+    // end adc
 
     ESP_LOGI(TAG, "[ 9 ] Stop audio_pipeline");
     audio_pipeline_stop(pipeline);
@@ -198,4 +371,6 @@ void app_main(void)
     audio_element_deinit(i2s_stream_reader);
     audio_element_deinit(delay);
     audio_element_deinit(i2s_stream_writer);
+
 }
+
